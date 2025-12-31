@@ -1,10 +1,13 @@
 let currentGroupName = "Unknown Group";
 
 // Ascultă mesajul cu numele grupului de la background
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "group_info") {
     currentGroupName = message.groupName;
+    console.log("Received group name:", currentGroupName);
+    sendResponse({ status: "received" });
   }
+  return true; // Keep message channel open
 });
 
 setTimeout(() => {

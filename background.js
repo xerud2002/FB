@@ -44,15 +44,30 @@ function checkGroup(group) {
         target: { tabId },
         files: ["checkForNewPost.js"]
       }).then(() => {
-        // Trimite numele grupului către script
-        chrome.tabs.sendMessage(tabId, { 
-          type: "group_info", 
-          groupName: group.name 
-        });
+        // Așteaptă 500ms înainte de a trimite mesajul
+        setTimeout(() => {
+          chrome.tabs.sendMessage(tabId, { 
+            type: "group_info", 
+            groupName: group.name 
+          }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.log(`Could not send message to tab ${tabId}:`, chrome.runtime.lastError.message);
+            }
+          });
+        }, 500);
+      }).catch(err => {
+        console.error(`Failed to inject script in tab ${tabId}:`, err);
       });
-    }, 2000);
+    }, 3000);
 
-    setTimeout(() => chrome.tabs.remove(tabId), 15000);
+    // Închide tab-ul după 20 secunde (mai mult timp)
+    setTimeout(() => {
+      chrome.tabs.remove(tabId, () => {
+        if (chrome.runtime.lastError) {
+          console.log(`Tab ${tabId} already closed`);
+        }
+      });
+    }, 20000);
   });
 }
 
