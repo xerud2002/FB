@@ -1,9 +1,8 @@
 // Lista grupuri de monitorizat (adaugă mai multe aici)
 const groups = [
-  { name: "MXC", url: "https://www.facebook.com/groups/179512120723134" },
-  { name: "Oferte Transport Europa", url: "https://www.facebook.com/groups/transport.europe" },
-  { name: "Transport Marfa Romania", url: "https://www.facebook.com/groups/transportmarfaromania" },
-  // Adaugă mai multe grupuri aici
+  { name: "Grup 1", url: "https://www.facebook.com/groups/1784041808422081" },
+  { name: "Grup 2", url: "https://www.facebook.com/groups/1854136051495911" },
+  { name: "Grup 3", url: "https://www.facebook.com/groups/2812445122109133" }
 ];
 
 // Mesaje random în română pentru comentarii
