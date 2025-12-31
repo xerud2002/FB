@@ -34,35 +34,49 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 function checkGroup(group) {
+  console.log(`[checkGroup] Starting check for: ${group.name}`);
+  console.log(`[checkGroup] URL: ${group.url}`);
+  
   chrome.tabs.create({ url: group.url, active: false }, (tab) => {
     const tabId = tab.id;
+    console.log(`[checkGroup] Tab created with ID: ${tabId}`);
 
     setTimeout(() => {
+      console.log(`[checkGroup] Attempting to inject script in tab ${tabId}...`);
+      
       chrome.scripting.executeScript({
         target: { tabId },
         files: ["checkForNewPost.js"]
       }).then(() => {
+        console.log(`[checkGroup] ✅ Script injected successfully in tab ${tabId}`);
+        
         // Așteaptă 500ms înainte de a trimite mesajul
         setTimeout(() => {
+          console.log(`[checkGroup] Sending group info to tab ${tabId}...`);
           chrome.tabs.sendMessage(tabId, { 
             type: "group_info", 
             groupName: group.name 
           }, (response) => {
             if (chrome.runtime.lastError) {
-              console.log(`Could not send message to tab ${tabId}:`, chrome.runtime.lastError.message);
+              console.error(`[checkGroup] ❌ Could not send message to tab ${tabId}:`, chrome.runtime.lastError.message);
+            } else {
+              console.log(`[checkGroup] ✅ Message sent to tab ${tabId}, response:`, response);
             }
           });
         }, 500);
       }).catch(err => {
-        console.error(`Failed to inject script in tab ${tabId}:`, err);
+        console.error(`[checkGroup] ❌ Failed to inject script in tab ${tabId}:`, err);
       });
     }, 3000);
 
     // Închide tab-ul după 20 secunde (mai mult timp)
     setTimeout(() => {
+      console.log(`[checkGroup] Closing tab ${tabId}...`);
       chrome.tabs.remove(tabId, () => {
         if (chrome.runtime.lastError) {
-          console.log(`Tab ${tabId} already closed`);
+          console.log(`[checkGroup] Tab ${tabId} already closed`);
+        } else {
+          console.log(`[checkGroup] ✅ Tab ${tabId} closed`);
         }
       });
     }, 20000);
