@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Facebook Group Post Assistant",
+  "version": "1.0",
+  "permissions": ["tabs", "scripting", "storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [{
+    "matches": ["*://www.facebook.com/groups/*"],
+    "js": ["content.js"]
+  }]
+}
