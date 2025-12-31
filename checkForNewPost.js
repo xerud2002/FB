@@ -111,10 +111,10 @@ setTimeout(() => {
         console.error(`❌ Error processing post #${index}:`, err);
       }
     });
-    
-    console.log(`\n=== SUMMARY ===`);
-    console.log(`Total posts detected: ${postsToday.length}`);
+    from last hour: ${postsToday.length}`);
     console.log(`Group: ${currentGroupName}`);
+    
+    // Trimite doar postările din ultima oră
     
     // Trimite TOATE postările găsite (nu filtrăm după timp aici)
     if (postsToday.length > 0) {

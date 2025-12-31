@@ -3,6 +3,7 @@
   "name": "Facebook Group Post Assistant",
   "version": "1.0",
   "permissions": ["tabs", "scripting", "storage", "alarms", "notifications"],
+  "host_permissions": ["*://www.facebook.com/*"],
   "background": {
     "service_worker": "background.js"
   },
