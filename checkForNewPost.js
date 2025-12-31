@@ -51,20 +51,56 @@ setTimeout(() => {
         let postUrl = null;
         let timeText = '';
         
-        // Caută link cu timestamp și permalink
+        // Caută link cu timestamp și permalink - mai multe metode
         allLinks.forEach(link => {
           const href = link.href || '';
-          const text = link.innerText?.toLowerCase() || '';
+          const text = (link.innerText || link.textContent || '').toLowerCase().trim();
+          const ariaLabel = (link.getAttribute('aria-label') || '').toLowerCase();
           
-          console.log(`  Link text: "${text.slice(0, 50)}" | href: ${href.slice(0, 80)}`);
+          // Log doar link-uri relevante
+          if (href && (href.includes('/posts/') || href.includes('/permalink/') || text.match(/\d+\s*(m|h|min|hour)/))) {
+            console.log(`  Link: "${text.slice(0, 40)}" | aria: "${ariaLabel.slice(0, 40)}" | href: ${href.slice(0, 80)}`);
+          }
           
-          // Dacă găsește link de permalink
+          // Metoda 1: Link-uri cu /posts/ sau /permalink/ în URL
           if ((href.includes('/posts/') || href.includes('/permalink/')) && !postUrl) {
             postUrl = href;
-            timeText = text;
-            console.log(`  ✅ Found permalink with time: "${text}"`);
+            timeText = text || ariaLabel;
+            console.log(`  ✅ Method 1: Found permalink, time: "${timeText}"`);
+          }
+          
+          // Metoda 2: Link-uri cu timestamp pattern în text (2m, 5h, etc)
+          if (!postUrl && text.match(/^\d+\s*(m|min|h|hr|hour|minute)/i)) {
+            // Găsește cel mai apropiat link de postare din parinte
+            let parent = link.parentElement;
+            let attempts = 0;
+            while (parent && attempts < 5) {
+              const parentLinks = parent.querySelectorAll('a[href*="/posts/"], a[href*="/permalink/"]');
+              if (parentLinks.length > 0) {
+                postUrl = parentLinks[0].href;
+                timeText = text;
+                console.log(`  ✅ Method 2: Found via parent traverse, time: "${timeText}"`);
+                break;
+              }
+              parent = parent.parentElement;
+              attempts++;
+            }
           }
         });
+        
+        // Metoda 3: Fallback - construiește URL din group + găsește story_fbid în HTML
+        if (!postUrl) {
+          const postHtml = post.innerHTML || '';
+          const storyMatch = postHtml.match(/story_fbid[=\/](\d+)/);
+          const pfbidMatch = postHtml.match(/pfbid[A-Za-z0-9]+/);
+          
+          if (storyMatch || pfbidMatch) {
+            const groupId = window.location.pathname.split('/')[2];
+            const storyId = storyMatch ? storyMatch[1] : pfbidMatch[0];
+            postUrl = `https://www.facebook.com/groups/${groupId}/posts/${storyId}/`;
+            console.log(`  ✅ Method 3: Constructed URL from story_fbid`);
+          }
+        }
         
         // Verifică dacă postarea e din ultima oră
         let isWithinLastHour = false;
