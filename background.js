@@ -70,16 +70,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   
-  // Backwards compatibility - postare unică
-  if (message.type === "new_post_detected") {
-    const groupKey = message.groupName || "unknown";
+  // Procesează toate postările din ziua curentă
+  if (message.type === "posts_from_today") {
+    console.log(`Received ${message.posts.length} posts from ${message.groupName}`);
     
-    // Verifică dacă e un post nevăzut
-    if (!seenPostIds.has(message.postId)) {
-      seenPostIds.add(message.postId);
-      saveSeenPostIds()ăzută
+    let newPostsCount = 0;
+    
+    message.posts.forEach(post => {
+      // Verifică dacă postarea a mai fost văzută
       if (!seenPostIds.has(post.postId)) {
         seenPostIds.add(post.postId);
+        newPostsCount++;
         
         // Adaugă postarea în lista de pending
         chrome.storage.local.get("pendingPosts", (data) => {
@@ -105,7 +106,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     saveSeenPostIds();
     
     // Notificare pentru toate postările noi găsite
-    const newPostsCount = message.posts.filter(p => !seenPostIds.has(p.postId)).length;
     if (newPostsCount > 0) {
       chrome.notifications.create({
         type: "basic",
@@ -122,11 +122,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   // Backwards compatibility - postare unică
   if (message.type === "new_post_detected") {
-    const groupKey = message.groupName || "unknown";
-    
-    // Verifică dacă e un post nou
-    if (message.postId !== lastPostIds[groupKey]) {
-      lastPostIds[groupKey] = message.postId;
+    // Verifică dacă e un post nevăzut
+    if (!seenPostIds.has(message.postId)) {
+      seenPostIds.add(message.postId);
+      saveSeenPostIds();
       
       // Adaugă postarea în lista de pending
       chrome.storage.local.get("pendingPosts", (data) => {
@@ -143,7 +142,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Notificare desktop
           chrome.notifications.create({
             type: "basic",
-            iconUrl: "icon.png",`,
+            iconUrl: "icon.png",
+            title: "Postare nouă detectată!",
+            message: `Grup: ${message.groupName}`,
             priority: 2
           });
         });
@@ -151,9 +152,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     sendResponse({ status: "received" });
-    return true;   });
-      });
-    }
+    return true;
   }
 });
 
