@@ -5,8 +5,21 @@ const groups = [
   { name: "Grup 3", url: "https://www.facebook.com/groups/2812445122109133" }
 ];
 
-// Tracking pentru ultimul post din fiecare grup
-let lastPostIds = {};
+// Tracking pentru toate post ID-urile văzute vreodată
+let seenPostIds = new Set();
+
+// Încarcă post ID-urile văzute la pornirea extensiei
+chrome.storage.local.get("seenPostIds", (data) => {
+  if (data.seenPostIds) {
+    seenPostIds = new Set(data.seenPostIds);
+    console.log(`Loaded ${seenPostIds.size} previously seen post IDs`);
+  }
+});
+
+// Salvează periodic post ID-urile văzute
+function saveSeenPostIds() {
+  chrome.storage.local.set({ seenPostIds: Array.from(seenPostIds) });
+}
 
 // Crează alarm pentru verificare periodică
 chrome.alarms.create("checkGroups", { periodInMinutes: 5 });
@@ -57,6 +70,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   
+  // Backwards compatibility - postare unică
+  if (message.type === "new_post_detected") {
+    const groupKey = message.groupName || "unknown";
+    
+    // Verifică dacă e un post nevăzut
+    if (!seenPostIds.has(message.postId)) {
+      seenPostIds.add(message.postId);
+      saveSeenPostIds()ăzută
+      if (!seenPostIds.has(post.postId)) {
+        seenPostIds.add(post.postId);
+        
+        // Adaugă postarea în lista de pending
+        chrome.storage.local.get("pendingPosts", (data) => {
+          const posts = data.pendingPosts || [];
+          
+          posts.push({
+            groupName: message.groupName,
+            postId: post.postId,
+            postUrl: post.postUrl,
+            timestamp: Date.now()
+          });
+          
+          chrome.storage.local.set({ pendingPosts: posts }, () => {
+            console.log(`Added new post: ${post.postId.slice(0, 30)}...`);
+          });
+        });
+      } else {
+        console.log(`Post already seen: ${post.postId.slice(0, 30)}...`);
+      }
+    });
+    
+    // Salvează lista actualizată de post ID-uri văzute
+    saveSeenPostIds();
+    
+    // Notificare pentru toate postările noi găsite
+    const newPostsCount = message.posts.filter(p => !seenPostIds.has(p.postId)).length;
+    if (newPostsCount > 0) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icon.png",
+        title: `${newPostsCount} postări noi detectate!`,
+        message: `Grup: ${message.groupName}`,
+        priority: 2
+      });
+    }
+    
+    sendResponse({ status: "processed" });
+    return true;
+  }
+  
+  // Backwards compatibility - postare unică
   if (message.type === "new_post_detected") {
     const groupKey = message.groupName || "unknown";
     
@@ -79,12 +143,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Notificare desktop
           chrome.notifications.create({
             type: "basic",
-            iconUrl: "icon.png",
-            title: "Postare nouă detectată!",
-            message: `Grup: ${message.groupName}\nClick pentru a răspunde!`,
+            iconUrl: "icon.png",`,
             priority: 2
           });
         });
+      });
+    }
+    
+    sendResponse({ status: "received" });
+    return true;   });
       });
     }
   }

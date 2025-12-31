@@ -9,7 +9,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
 setTimeout(() => {
   try {
-    console.log("Searching for posts in feed...");
+    console.log("Searching for ALL posts from today in feed...");
     
     const feed = document.querySelector('[role="feed"]');
     if (!feed) {
@@ -17,42 +17,67 @@ setTimeout(() => {
       return;
     }
     
-    // Caută primul post din feed - diverse variante de selectori
-    let post = feed.querySelector('div[data-pagelet^="FeedUnit"]') || 
-               feed.querySelector('div[aria-posinset="1"]') ||
-               feed.querySelector('div > div > div');
+    // Găsește TOATE postările din feed
+    const allPosts = feed.querySelectorAll('div[data-pagelet^="FeedUnit"], div[aria-posinset]');
+    console.log(`Found ${allPosts.length} posts in feed`);
     
-    console.log("Post element found:", post);
+    const today = new Date();
+    const postsToday = [];
     
-    // Extrage ID-ul postării - încearcă mai multe metode
-    let postId = post?.getAttribute("data-ad-preview") || 
-                 post?.id ||
-                 post?.querySelector('[id]')?.id ||
-                 post?.innerText?.slice(0, 150).replace(/\s+/g, '_');
+    allPosts.forEach((post, index) => {
+      try {
+        // Caută timestamp-ul postării
+        const timeLinks = post.querySelectorAll('a[href*="/posts/"], a[href*="/permalink/"], span[id] a');
+        let isToday = false;
+        let postUrl = null;
+        
+        timeLinks.forEach(link => {
+          const text = link.innerText?.toLowerCase() || '';
+          // Verifică dacă e din azi: "Just now", "1h", "2h", "3 min", etc (fără "d" sau "day")
+          if (text.includes('just now') || 
+              text.includes('now') ||
+              text.includes('min') ||
+              (text.includes('h') && !text.includes('d')) ||
+              text.match(/^\d+\s*(m|h|min|mins|hr|hrs|hour|hours)$/i)) {
+            isToday = true;
+            postUrl = link.href;
+          }
+        });
+        
+        if (isToday && postUrl) {
+          // Extrage ID unic
+          let postId = post.getAttribute("data-ad-preview") || 
+                       post.id ||
+                       post.querySelector('[id]')?.id ||
+                       postUrl.split('/').pop() ||
+                       post.innerText?.slice(0, 100).replace(/\s+/g, '_');
+          
+          if (!postUrl.startsWith('http')) {
+            postUrl = 'https://www.facebook.com' + postUrl;
+          }
+          
+          postsToday.push({ postId, postUrl });
+          console.log(`Post #${index + 1} from today:`, { postId, postUrl });
+        }
+      } catch (err) {
+        console.warn(`Error processing post #${index}:`, err);
+      }
+    });
     
-    // Extrage URL-ul postării
-    const postLink = post?.querySelector('a[href*="/posts/"], a[href*="/permalink/"], a[aria-label*="ago"]');
-    let postUrl = postLink?.href || window.location.href;
+    console.log(`Total posts from today: ${postsToday.length}`);
     
-    if (postUrl && !postUrl.startsWith('http')) {
-      postUrl = 'https://www.facebook.com' + postUrl;
-    }
-    
-    console.log("Post detectat:", { postId, postUrl, groupName: currentGroupName, preview: post?.innerText?.slice(0, 100) });
-    
-    // Trimite mesaj către background
-    if (postId && postUrl) {
+    // Trimite toate postările din azi către background
+    if (postsToday.length > 0) {
       chrome.runtime.sendMessage({ 
-        type: "new_post_detected", 
-        postId,
-        postUrl,
+        type: "posts_from_today", 
+        posts: postsToday,
         groupName: currentGroupName
       });
     } else {
-      console.warn("Could not extract post ID or URL");
+      console.log("No posts from today found");
     }
     
   } catch (err) {
-    console.warn("Nu s-a putut detecta postarea:", err);
+    console.warn("Nu s-a putut detecta postările:", err);
   }
-}, 7000); // Așteaptă 7s să se încarce complet pagina
+}, 8000); // Așteaptă 8s să se încarce complet pagina
