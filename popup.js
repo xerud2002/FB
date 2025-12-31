@@ -1,8 +1,6 @@
 // Lista grupuri de monitorizat (adaugă mai multe aici)
 const groups = [
-  { name: "Grup 1", url: "https://www.facebook.com/groups/1784041808422081" },
-  { name: "Grup 2", url: "https://www.facebook.com/groups/1854136051495911" },
-  { name: "Grup 3", url: "https://www.facebook.com/groups/2812445122109133" }
+  { name: "Test Group", url: "https://www.facebook.com/groups/1784041808422081" }
 ];
 
 // Mesaje random în română pentru comentarii
