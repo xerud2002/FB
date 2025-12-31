@@ -95,3 +95,21 @@ loadPendingPosts();
 
 // Reîncarcă lista la fiecare 2 secunde (pentru actualizări)
 setInterval(loadPendingPosts, 2000);
+
+// Buton pentru verificare manuală
+document.getElementById("checkNowBtn").onclick = () => {
+  const btn = document.getElementById("checkNowBtn");
+  btn.innerText = "⏳ Verificare în curs...";
+  btn.disabled = true;
+  
+  // Trimite mesaj către background să verifice toate grupurile
+  chrome.runtime.sendMessage({ type: "check_groups_now" }, () => {
+    setTimeout(() => {
+      btn.innerText = "✅ Verificat!";
+      setTimeout(() => {
+        btn.innerText = "🔄 Verifică Acum Toate Grupurile";
+        btn.disabled = false;
+      }, 2000);
+    }, groups.length * 6000); // Așteaptă să termine toate grupurile
+  });
+};

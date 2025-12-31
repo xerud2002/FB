@@ -9,34 +9,50 @@ chrome.runtime.onMessage.addListener((message) => {
 
 setTimeout(() => {
   try {
+    console.log("Searching for posts in feed...");
+    
     const feed = document.querySelector('[role="feed"]');
-    const post = feed?.querySelector('div[data-pagelet^="FeedUnit"]') || feed?.querySelector('div > div');
+    if (!feed) {
+      console.warn("Feed not found!");
+      return;
+    }
     
-    // Extrage ID-ul postării
-    const postId = post?.getAttribute("data-ad-preview") || 
-                   post?.dataset?.ft?.mf_story_key || 
-                   post?.innerText?.slice(0, 100);
+    // Caută primul post din feed - diverse variante de selectori
+    let post = feed.querySelector('div[data-pagelet^="FeedUnit"]') || 
+               feed.querySelector('div[aria-posinset="1"]') ||
+               feed.querySelector('div > div > div');
     
-    // Extrage URL-ul postării (caută link-ul de timestamp)
-    const postLink = post?.querySelector('a[href*="/posts/"], a[href*="/permalink/"]');
+    console.log("Post element found:", post);
+    
+    // Extrage ID-ul postării - încearcă mai multe metode
+    let postId = post?.getAttribute("data-ad-preview") || 
+                 post?.id ||
+                 post?.querySelector('[id]')?.id ||
+                 post?.innerText?.slice(0, 150).replace(/\s+/g, '_');
+    
+    // Extrage URL-ul postării
+    const postLink = post?.querySelector('a[href*="/posts/"], a[href*="/permalink/"], a[aria-label*="ago"]');
     let postUrl = postLink?.href || window.location.href;
     
-    // Asigură-te că URL-ul e complet
     if (postUrl && !postUrl.startsWith('http')) {
       postUrl = 'https://www.facebook.com' + postUrl;
     }
     
-    console.log("Post detectat:", { postId, postUrl, groupName: currentGroupName });
+    console.log("Post detectat:", { postId, postUrl, groupName: currentGroupName, preview: post?.innerText?.slice(0, 100) });
     
-    // Trimite mesaj către background cu detaliile postării
-    chrome.runtime.sendMessage({ 
-      type: "new_post_detected", 
-      postId,
-      postUrl,
-      groupName: currentGroupName
-    });
+    // Trimite mesaj către background
+    if (postId && postUrl) {
+      chrome.runtime.sendMessage({ 
+        type: "new_post_detected", 
+        postId,
+        postUrl,
+        groupName: currentGroupName
+      });
+    } else {
+      console.warn("Could not extract post ID or URL");
+    }
     
   } catch (err) {
     console.warn("Nu s-a putut detecta postarea:", err);
   }
-}, 5000); // Așteaptă 5s să se încarce pagina
+}, 7000); // Așteaptă 7s să se încarce complet pagina

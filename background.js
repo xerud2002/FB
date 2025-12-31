@@ -44,7 +44,19 @@ function checkGroup(group) {
 }
 
 // Ascultă mesaje despre postări noi
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Verificare manuală din popup
+  if (message.type === "check_groups_now") {
+    console.log("Manual check triggered!");
+    groups.forEach((group, index) => {
+      setTimeout(() => {
+        checkGroup(group);
+      }, index * 5000);
+    });
+    sendResponse({ status: "checking" });
+    return true;
+  }
+  
   if (message.type === "new_post_detected") {
     const groupKey = message.groupName || "unknown";
     
