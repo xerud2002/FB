@@ -9,75 +9,104 @@ chrome.runtime.onMessage.addListener((message) => {
 
 setTimeout(() => {
   try {
-    console.log("Searching for ALL posts from today in feed...");
+    console.log("=== STARTING POST DETECTION ===");
+    console.log("Current group:", currentGroupName);
+    console.log("Page URL:", window.location.href);
     
     const feed = document.querySelector('[role="feed"]');
     if (!feed) {
-      console.warn("Feed not found!");
+      console.error("❌ Feed not found! Selectors might have changed.");
       return;
     }
     
-    // Găsește TOATE postările din feed
-    const allPosts = feed.querySelectorAll('div[data-pagelet^="FeedUnit"], div[aria-posinset]');
-    console.log(`Found ${allPosts.length} posts in feed`);
+    console.log("✅ Feed found!");
     
-    const today = new Date();
+    // Găsește TOATE postările din feed - încearcă mai multe selectoare
+    let allPosts = feed.querySelectorAll('div[data-pagelet^="FeedUnit"]');
+    if (allPosts.length === 0) {
+      allPosts = feed.querySelectorAll('div[aria-posinset]');
+    }
+    if (allPosts.length === 0) {
+      allPosts = feed.querySelectorAll('div[role="article"]');
+    }
+    
+    console.log(`Found ${allPosts.length} total posts in feed`);
+    
+    if (allPosts.length === 0) {
+      console.error("❌ No posts found with any selector!");
+      return;
+    }
+    
     const postsToday = [];
     
     allPosts.forEach((post, index) => {
       try {
-        // Caută timestamp-ul postării
-        const timeLinks = post.querySelectorAll('a[href*="/posts/"], a[href*="/permalink/"], span[id] a');
-        let isToday = false;
-        let postUrl = null;
+        // Găsește TOATE link-urile din postare
+        const allLinks = post.querySelectorAll('a');
+        console.log(`Post #${index + 1}: Found ${allLinks.length} links`);
         
-        timeLinks.forEach(link => {
+        let postUrl = null;
+        let timeText = '';
+        
+        // Caută link cu timestamp și permalink
+        allLinks.forEach(link => {
+          const href = link.href || '';
           const text = link.innerText?.toLowerCase() || '';
-          // Verifică dacă e din azi: "Just now", "1h", "2h", "3 min", etc (fără "d" sau "day")
-          if (text.includes('just now') || 
-              text.includes('now') ||
-              text.includes('min') ||
-              (text.includes('h') && !text.includes('d')) ||
-              text.match(/^\d+\s*(m|h|min|mins|hr|hrs|hour|hours)$/i)) {
-            isToday = true;
-            postUrl = link.href;
+          
+          console.log(`  Link text: "${text.slice(0, 50)}" | href: ${href.slice(0, 80)}`);
+          
+          // Dacă găsește link de permalink
+          if ((href.includes('/posts/') || href.includes('/permalink/')) && !postUrl) {
+            postUrl = href;
+            timeText = text;
+            console.log(`  ✅ Found permalink with time: "${text}"`);
           }
         });
         
-        if (isToday && postUrl) {
-          // Extrage ID unic
-          let postId = post.getAttribute("data-ad-preview") || 
-                       post.id ||
-                       post.querySelector('[id]')?.id ||
-                       postUrl.split('/').pop() ||
-                       post.innerText?.slice(0, 100).replace(/\s+/g, '_');
+        if (postUrl) {
+          // Extrage ID unic din URL
+          const urlParts = postUrl.split('/');
+          let postId = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+          
+          if (!postId || postId.includes('?')) {
+            postId = post.id || post.getAttribute("data-ad-preview") || 
+                     post.querySelector('[id]')?.id || 
+                     `post_${index}_${Date.now()}`;
+          }
           
           if (!postUrl.startsWith('http')) {
             postUrl = 'https://www.facebook.com' + postUrl;
           }
           
-          postsToday.push({ postId, postUrl });
-          console.log(`Post #${index + 1} from today:`, { postId, postUrl });
+          postsToday.push({ postId, postUrl, timeText });
+          console.log(`✅ Added post #${index + 1}: ID=${postId.slice(0, 30)}, Time="${timeText}"`);
+        } else {
+          console.log(`  ⚠️ No permalink found for post #${index + 1}`);
         }
       } catch (err) {
-        console.warn(`Error processing post #${index}:`, err);
+        console.error(`❌ Error processing post #${index}:`, err);
       }
     });
     
-    console.log(`Total posts from today: ${postsToday.length}`);
+    console.log(`\n=== SUMMARY ===`);
+    console.log(`Total posts detected: ${postsToday.length}`);
+    console.log(`Group: ${currentGroupName}`);
     
-    // Trimite toate postările din azi către background
+    // Trimite TOATE postările găsite (nu filtrăm după timp aici)
     if (postsToday.length > 0) {
+      console.log("Sending posts to background...");
       chrome.runtime.sendMessage({ 
         type: "posts_from_today", 
         posts: postsToday,
         groupName: currentGroupName
+      }, (response) => {
+        console.log("Response from background:", response);
       });
     } else {
-      console.log("No posts from today found");
+      console.error("❌ No posts with permalinks found!");
     }
     
   } catch (err) {
-    console.warn("Nu s-a putut detecta postările:", err);
+    console.error("❌ Fatal error in post detection:", err);
   }
-}, 8000); // Așteaptă 8s să se încarce complet pagina
+}, 10000); // Așteaptă 10s să se încarce complet pagina
