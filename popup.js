@@ -103,7 +103,16 @@ document.getElementById("checkNowBtn").onclick = () => {
   btn.disabled = true;
   
   // Trimite mesaj către background să verifice toate grupurile
-  chrome.runtime.sendMessage({ type: "check_groups_now" }, () => {
+  chrome.runtime.sendMessage({ type: "check_groups_now" }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error("Error sending message:", chrome.runtime.lastError.message);
+      btn.innerText = "❌ Eroare!";
+      btn.disabled = false;
+      return;
+    }
+    
+    console.log("Check triggered, response:", response);
+    
     setTimeout(() => {
       btn.innerText = "✅ Verificat!";
       setTimeout(() => {
