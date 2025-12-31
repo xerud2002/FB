@@ -66,7 +66,26 @@ setTimeout(() => {
           }
         });
         
-        if (postUrl) {
+        // Verifică dacă postarea e din ultima oră
+        let isWithinLastHour = false;
+        if (timeText) {
+          const t = timeText.toLowerCase();
+          // "just now", "now", "Xm", "X min" unde X < 60
+          if (t.includes('just now') || t === 'now') {
+            isWithinLastHour = true;
+          } else if (t.match(/^\d+\s*(m|min|mins|minute|minutes)$/)) {
+            // Extrage numărul de minute
+            const minutes = parseInt(t.match(/\d+/)[0]);
+            if (minutes < 60) {
+              isWithinLastHour = true;
+            }
+          } else if (t === '1h' || t === '1 h' || t === '1 hr' || t === '1 hour') {
+            // Exact 1 oră - limită
+            isWithinLastHour = true;
+          }
+        }
+        
+        if (postUrl && isWithinLastHour) {
           // Extrage ID unic din URL
           const urlParts = postUrl.split('/');
           let postId = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
@@ -83,6 +102,8 @@ setTimeout(() => {
           
           postsToday.push({ postId, postUrl, timeText });
           console.log(`✅ Added post #${index + 1}: ID=${postId.slice(0, 30)}, Time="${timeText}"`);
+        } else if (postUrl && !isWithinLastHour) {
+          console.log(`  ⏰ Post #${index + 1} skipped - older than 1 hour: "${timeText}"`);
         } else {
           console.log(`  ⚠️ No permalink found for post #${index + 1}`);
         }
