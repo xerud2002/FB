@@ -7,8 +7,8 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  width: 550px;
-  max-height: 700px;
+  width: 850px;
+  max-height: 900px;
   color: #2d3748;
   overflow: hidden;
 }
@@ -152,12 +152,19 @@ hr {
   border-radius: 10px;
 }
 
+#pendingPosts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding-right: 5px;
+}
+
 .post-card {
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   border: 2px solid #e2e8f0;
   border-radius: 12px;
   padding: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 0;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
