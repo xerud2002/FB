@@ -164,77 +164,84 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     console.log(`[POSTS] Posts data:`, message.posts);
     
-    let newPostsCount = 0;
-    
-    message.posts.forEach((post, idx) => {
-      console.log(`[POSTS] Processing post ${idx + 1}/${message.posts.length}: ${post.postId?.slice(0, 30)}`);
+    // Procesează toate posturile într-un singur batch pentru a evita race conditions
+    chrome.storage.local.get("pendingPosts", (data) => {
+      const existingPosts = data.pendingPosts || [];
+      let newPostsCount = 0;
+      const newPosts = [];
       
-      // Verifică dacă postarea a mai fost văzută
-      if (!seenPostIds.has(post.postId)) {
-        seenPostIds.add(post.postId);
-        newPostsCount++;
+      message.posts.forEach((post, idx) => {
+        console.log(`[POSTS] Processing post ${idx + 1}/${message.posts.length}: ${post.postId?.slice(0, 30)}`);
         
-        console.log(`[POSTS] ✅ New post! Adding to pendingPosts...`);
-        
-        // Adaugă postarea în lista de pending
-        chrome.storage.local.get("pendingPosts", (data) => {
-          const posts = data.pendingPosts || [];
+        // Verifică dacă postarea a mai fost văzută
+        if (!seenPostIds.has(post.postId)) {
+          seenPostIds.add(post.postId);
+          newPostsCount++;
           
-          posts.push({
+          console.log(`[POSTS] ✅ New post! Will add to pendingPosts...`);
+          
+          // Adaugă în array temporar
+          newPosts.push({
             groupName: message.groupName,
             postId: post.postId,
             postUrl: post.postUrl,
+            timeText: post.timeText || 'Necunoscut',
+            service: post.service || 'Transport General',
             timestamp: Date.now()
           });
           
-          chrome.storage.local.set({ pendingPosts: posts }, () => {
-            console.log(`[POSTS] ✅ Saved! Total pending posts: ${posts.length}`);
+          // TRIMITE POST CĂTRE PWA BACKEND
+          const postData = {
+            postId: post.postId,
+            postUrl: post.postUrl,
+            timeText: post.timeText || 'Necunoscut',
+            service: post.service || 'Transport General',
+            keyword: post.keyword || 'transport',
+            timestamp: Date.now()
+          };
+          
+          fetch('http://localhost:3000/api/posts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(postData)
+          })
+          .then(response => response.json())
+          .then(result => {
+            console.log(`[PWA] ✅ Post sent to PWA backend:`, result);
+          })
+          .catch(err => {
+            console.error(`[PWA] ❌ Failed to send post to PWA:`, err.message);
+            // Nu oprim procesarea - PWA poate fi offline
           });
-        });
-        
-        // TRIMITE POST CĂTRE PWA BACKEND
-        const postData = {
-          postId: post.postId,
-          postUrl: post.postUrl,
-          timeText: post.timeText || 'Necunoscut',
-          service: post.service || 'Transport General',
-          keyword: post.keyword || 'transport',
-          timestamp: Date.now()
-        };
-        
-        fetch('http://localhost:3000/api/posts', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(postData)
-        })
-        .then(response => response.json())
-        .then(result => {
-          console.log(`[PWA] ✅ Post sent to PWA backend:`, result);
-        })
-        .catch(err => {
-          console.error(`[PWA] ❌ Failed to send post to PWA:`, err.message);
-          // Nu oprim procesarea - PWA poate fi offline
-        });
-      } else {
-        console.log(`[POSTS] ⏭️ Post already seen: ${post.postId?.slice(0, 30)}`);
-      }
-    });
-    
-    // Salvează lista actualizată de post ID-uri văzute
-    saveSeenPostIds();
-    
-    // Notificare pentru toate postările noi găsite
-    if (newPostsCount > 0) {
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: "icon.png",
-        title: `${newPostsCount} postări noi detectate!`,
-        message: `Grup: ${message.groupName}`,
-        priority: 2
+        } else {
+          console.log(`[POSTS] ⏭️ Post already seen: ${post.postId?.slice(0, 30)}`);
+        }
       });
-    }
-    
-    sendResponse({ status: "processed" });
+      
+      // Salvează toate posturile noi într-o singură operație
+      if (newPosts.length > 0) {
+        const allPosts = [...existingPosts, ...newPosts];
+        chrome.storage.local.set({ pendingPosts: allPosts }, () => {
+          console.log(`[POSTS] ✅ Saved ${newPosts.length} new posts! Total pending: ${allPosts.length}`);
+        });
+      }
+      
+      // Salvează lista actualizată de post ID-uri văzute
+      saveSeenPostIds();
+      
+      // Notificare pentru toate postările noi găsite
+      if (newPostsCount > 0) {
+        chrome.notifications.create({
+          type: "basic",
+          iconUrl: "icon.png",
+          title: `${newPostsCount} postări noi detectate!`,
+          message: `Grup: ${message.groupName}`,
+          priority: 2
+        });
+      }
+      
+      sendResponse({ status: "processed", newPosts: newPostsCount });
+    });
     return true;
   }
 });
