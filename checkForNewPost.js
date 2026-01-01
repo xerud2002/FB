@@ -112,19 +112,41 @@ setTimeout(() => {
         let isWithinLastHour = false;
         if (timeText) {
           const t = timeText.toLowerCase();
-          // "just now", "now", "Xm", "X min" unde X < 60
-          if (t.includes('just now') || t === 'now') {
+          
+          console.log(`  ⏰ Checking time: "${timeText}"`);
+          
+          // Variante în engleză și română
+          if (t.includes('just now') || t.includes('acum') || t === 'now') {
             isWithinLastHour = true;
-          } else if (t.match(/^\d+\s*(m|min|mins|minute|minutes)$/)) {
-            // Extrage numărul de minute
+            console.log(`    ✅ Match: just now/acum`);
+          } 
+          // Minute: "2m", "2 min", "2 minute", "2 mins"
+          else if (t.match(/^\d+\s*(m|min|mins|minute|minutes)$/i)) {
             const minutes = parseInt(t.match(/\d+/)[0]);
-            if (minutes < 60) {
-              isWithinLastHour = true;
-            }
-          } else if (t === '1h' || t === '1 h' || t === '1 hr' || t === '1 hour') {
-            // Exact 1 oră - limită
-            isWithinLastHour = true;
+            isWithinLastHour = minutes < 60;
+            console.log(`    ${isWithinLastHour ? '✅' : '❌'} ${minutes} minutes`);
           }
+          // Ore: "1h", "1 h", "1 hr", "1 hour", "1 oră", "1 ore"
+          else if (t.match(/^1\s*(h|hr|hour|oră|ore)$/i)) {
+            isWithinLastHour = true;
+            console.log(`    ✅ Match: 1 hour`);
+          }
+          // Alte ore (2h, 5h, etc) - NU includem
+          else if (t.match(/^\d+\s*(h|hr|hour|hours|oră|ore)$/i)) {
+            const hours = parseInt(t.match(/\d+/)[0]);
+            isWithinLastHour = false;
+            console.log(`    ❌ ${hours} hours - too old`);
+          }
+          // Zile - NU includem
+          else if (t.match(/\d+\s*(d|day|days|zi|zile)/i)) {
+            isWithinLastHour = false;
+            console.log(`    ❌ Days old - skipping`);
+          }
+          else {
+            console.log(`    ⚠️ Unknown time format: "${t}"`);
+          }
+        } else {
+          console.log(`  ⚠️ No time text found`);
         }
         
         if (postUrl && isWithinLastHour) {
