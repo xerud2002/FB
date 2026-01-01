@@ -1,4 +1,4 @@
-﻿// Background v4
+﻿// Background v5
 console.log("BG Started");
 
 const GROUP = {
@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener((m, s, send) => {
   }
   
   if (m.type === "scan_results") {
-    console.log("BG got results:", m.posts?.length);
+    console.log("BG scan_results:", m.posts?.length, "posts");
     if (m.posts?.length) savePosts(m.posts);
     send({ok:true});
     return true;
@@ -51,11 +51,11 @@ async function doCheck() {
       }
     };
     chrome.tabs.onUpdated.addListener(fn);
-    setTimeout(() => { chrome.tabs.onUpdated.removeListener(fn); r(); }, 20000);
+    setTimeout(() => { chrome.tabs.onUpdated.removeListener(fn); r(); }, 30000);
   });
   
-  console.log("BG: Page loaded, waiting 5s...");
-  await sleep(5000);
+  console.log("BG: Page loaded, waiting 8s for FB to render...");
+  await sleep(8000);
   
   console.log("BG: Sending scan_now...");
   
@@ -64,14 +64,17 @@ async function doCheck() {
       type: "scan_now",
       groupName: GROUP.name
     });
-    console.log("BG: Got response:", resp);
-    if (resp?.posts?.length) savePosts(resp.posts);
+    console.log("BG: Response posts:", resp?.posts?.length);
+    if (resp?.posts?.length) {
+      savePosts(resp.posts);
+    }
   } catch(e) {
     console.log("BG: Error:", e.message);
   }
   
-  // Wait before close
-  await sleep(3000);
+  // Keep tab open for 1 minute before closing
+  console.log("BG: Keeping tab open for 60s...");
+  await sleep(60000);
   
   try { await chrome.tabs.remove(tab.id); } catch(e) {}
   console.log("BG: Done");
@@ -80,7 +83,7 @@ async function doCheck() {
 
 function savePosts(posts) {
   const newP = posts.filter(p => !seen.has(p.postId));
-  console.log("BG: New posts:", newP.length);
+  console.log("BG: New posts:", newP.length, "of", posts.length);
   
   if (!newP.length) return;
   
@@ -90,7 +93,7 @@ function savePosts(posts) {
   chrome.storage.local.get("pendingPosts", d => {
     const all = [...newP, ...(d.pendingPosts || [])].slice(0, 50);
     chrome.storage.local.set({pendingPosts: all});
-    console.log("BG: Saved! Total:", all.length);
+    console.log("BG: SAVED! Total pending:", all.length);
     
     chrome.notifications.create({
       type: "basic",

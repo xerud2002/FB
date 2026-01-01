@@ -24,26 +24,18 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         
         for (const a of links) {
           const href = a.href || a.getAttribute("href") || "";
-          if (href.includes("/groups/") && href.includes("/posts/")) {
-            url = href.split("?")[0];
-            break;
-          }
-          if (href.includes("/groups/") && href.match(/\/\d{10,}/)) {
-            url = href.split("?")[0];
-            break;
-          }
-        }
+        console.log("[CS] Link:", href.substring(0, 80));
         
-        if (!url) {
-          // Fallback: first /groups/ link
-          for (const a of links) {
-            const href = a.href || "";
-            if (href.includes("/groups/")) {
-              url = href.split("?")[0];
-              break;
-            }
-          }
+        if (href.includes("/groups/") && href.includes("/posts/")) {
+          url = href.split("?")[0];
+          break;
         }
+        if (href.includes("/groups/") && href.match(/\/\d{10,}/)) {
+          url = href.split("?")[0];
+          break;
+        }
+        if (href.includes("/groups/") && !url) {
+          url = href.split("?")[0]; // Take ANY /groups/ link
         
         console.log("[CS] Article", i, "URL:", url ? url.substring(0, 60) : "NONE");
         
