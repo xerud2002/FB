@@ -1,81 +1,47 @@
-﻿// Content Script v6 - DEBUG
-console.log("[CS] v6 LOADED");
+﻿// Content Script FINAL
+console.log("[CS] FINAL LOADED");
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  console.log("[CS] GOT MESSAGE:", msg.type);
-  
   if (msg.type === "scan_now") {
-    console.log("[CS] STARTING SCAN");
+    const articles = document.querySelectorAll('[role="article"]');
+    const results = [];
     
-    setTimeout(() => {
-      const articles = document.querySelectorAll('[role="article"]');
-      console.log("[CS] ARTICLES:", articles.length);
+    articles.forEach((art, i) => {
+      const links = art.querySelectorAll("a[href]");
+      let url = null;
       
-      const results = [];
-      
-      for (let i = 0; i < articles.length; i++) {
-        const art = articles[i];
-        const txt = art.textContent || "";
-        console.log("[CS] Article", i, "text length:", txt.length);
-        
-        // Gaseste ORICE link din articol
-        const links = art.querySelectorAll("a[href]");
-        let url = null;
-        
-        for (const a of links) {
-          const href = a.href || a.getAttribute("href") || "";
-        console.log("[CS] Link:", href.substring(0, 80));
-        
-        if (href.includes("/groups/") && href.includes("/posts/")) {
-          url = href.split("?")[0];
+      for (const link of links) {
+        const h = link.href || "";
+        if (h.includes("/groups/1784041808422081") && (h.includes("/posts/") || h.includes("/permalink/") || h.match(/\/\d{15,}/))) {
+          url = h.split("?")[0].split("#")[0];
           break;
-        }
-        if (href.includes("/groups/") && href.match(/\/\d{10,}/)) {
-          url = href.split("?")[0];
-          break;
-        }
-        if (href.includes("/groups/") && !url) {
-          url = href.split("?")[0]; // Take ANY /groups/ link
-        
-        console.log("[CS] Article", i, "URL:", url ? url.substring(0, 60) : "NONE");
-        
-        if (url) {
-          results.push({
-            postId: "post" + i + "_" + Date.now(),
-            postUrl: url,
-            postText: txt.substring(0, 150),
-            timeText: "test",
-            keyword: "test",
-            groupName: msg.groupName || "Test"
-          });
         }
       }
       
-      console.log("[CS] RESULTS:", results.length);
-      
-      // Send via message too
-      if (results.length > 0) {
-        chrome.runtime.sendMessage({type: "scan_results", posts: results});
+      if (url) {
+        results.push({
+          postId: url.match(/\d{15,}/)?.[0] || ("p" + Date.now() + i),
+          postUrl: url,
+          postText: (art.textContent || "").substring(0, 200),
+          timeText: "recent",
+          keyword: "found",
+          groupName: msg.groupName
+        });
       }
-      
-      sendResponse({posts: results});
-    }, 3000); // Wait 3s for page
+    });
     
+    console.log("[CS] Results:", results.length);
+    if (results.length) chrome.runtime.sendMessage({type: "scan_results", posts: results});
+    sendResponse({posts: results});
     return true;
   }
   
   if (msg.type === "type_comment") {
-    const boxes = document.querySelectorAll('[contenteditable="true"][role="textbox"]');
-    for (const box of boxes) {
-      if (box.offsetParent) {
-        box.focus();
-        document.execCommand("insertText", false, msg.text);
-        console.log("[CS] TYPED");
-        break;
-      }
+    const box = document.querySelector('[contenteditable="true"][role="textbox"]');
+    if (box) {
+      box.focus();
+      document.execCommand("insertText", false, msg.text);
     }
     sendResponse({ok: true});
   }
 });
-
-console.log("[CS] v6 READY");
