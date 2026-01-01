@@ -154,16 +154,23 @@ setTimeout(() => {
     
     // Trimite doar postările din ultima oră
     if (postsToday.length > 0) {
-      console.log("Sending posts to background...");
+      console.log("📤 Sending posts to background...");
+      console.log("Posts to send:", postsToday);
+      
       chrome.runtime.sendMessage({ 
         type: "posts_from_today", 
         posts: postsToday,
         groupName: currentGroupName
       }, (response) => {
-        console.log("Response from background:", response);
+        if (chrome.runtime.lastError) {
+          console.error("❌ Error sending message:", chrome.runtime.lastError.message);
+        } else {
+          console.log("✅ Response from background:", response);
+        }
       });
     } else {
-      console.error("❌ No posts with permalinks found!");
+      console.error("❌ No posts from last hour found!");
+      console.log("Total posts scanned:", allPosts.length);
     }
     
   } catch (err) {
