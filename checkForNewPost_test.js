@@ -220,7 +220,6 @@ function extractPostInfo(post) {
       console.log(`  ✅ Pattern 5 - Any FB /posts/ URL`);
       break;
     }
-    } // Close for loop
   }
   
   // Log status
@@ -466,5 +465,3 @@ function scanFeed() {
     console.error("❌ Scan error:", err);
   }
 } // End of scanFeed function
-
-// EOF
