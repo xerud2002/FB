@@ -8,6 +8,28 @@ const GROUP = {
 
 let seen = new Set();
 let busy = false;
+let popupWindowId = null;
+
+// Open popup as separate window on extension icon click
+chrome.action.onClicked.addListener(() => {
+  if (popupWindowId) {
+    chrome.windows.update(popupWindowId, {focused: true});
+  } else {
+    chrome.windows.create({
+      url: "popup.html",
+      type: "popup",
+      width: 340,
+      height: 600,
+      focused: true
+    }, (win) => {
+      popupWindowId = win.id;
+    });
+  }
+});
+
+chrome.windows.onRemoved.addListener((winId) => {
+  if (winId === popupWindowId) popupWindowId = null;
+});
 
 chrome.storage.local.get(["seenPostIds"], d => {
   if (d.seenPostIds) seen = new Set(d.seenPostIds);
