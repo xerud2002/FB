@@ -277,28 +277,24 @@ setTimeout(() => {
     console.log("URL:", window.location.href);
     
     // Scroll pentru a încărca mai multe postări
-    console.log("📜 Scrolling to load more posts...");
-    let scrollAttempts = 0;
-    const maxScrolls = 12;
+    // Un singur scroll mic pentru a încărca postările vizibile
+    console.log("📜 Loading posts...");
+    window.scrollTo(0, 1000); // Scroll mic
     
-    const scrollInterval = setInterval(() => {
-      window.scrollTo(0, document.body.scrollHeight);
-      scrollAttempts++;
-      console.log(`  Scroll ${scrollAttempts}/${maxScrolls}...`);
-      
-      if (scrollAttempts >= maxScrolls) {
-        clearInterval(scrollInterval);
-        console.log("✅ Scroll complete, starting scan...");
+    setTimeout(() => {
+      window.scrollTo(0, 2000); // Încă un scroll
+      setTimeout(() => {
+        console.log("✅ Starting scan of first 20 posts...");
         scanFeed();
-      }
-    }, 5000);
+      }, 2000);
+    }, 2000);
     
   } catch (err) {
     console.error("❌ Fatal error:", err);
   }
-}, 20000); // Wait 20s for initial page load (original spec)
+}, 8000); // Wait doar 8s pentru page load (era 20s)
 
-// Funcție de scanare feed
+// Funcție de scanare feed - DOAR PRIMELE 20 POSTĂRI
 function scanFeed() {
   try {
     const feed = document.querySelector('[role="feed"]');
@@ -324,17 +320,23 @@ function scanFeed() {
     
     let allPosts = [];
     for (const selector of selectors) {
-      allPosts = feed.querySelectorAll(selector.query);
-      console.log(`  ${selector.name}: ${allPosts.length} posts`);
-      if (allPosts.length > 0) break;
+      const found = feed.querySelectorAll(selector.query);
+      console.log(`  ${selector.name}: ${found.length} posts`);
+      if (found.length > 0) {
+        // LIMITĂ: Doar primele 20 de postări!
+        allPosts = Array.from(found).slice(0, 20);
+        console.log(`  ✅ Using first ${allPosts.length} posts`);
+        break;
+      }
     }
     
     // Fallback: large divs with many links
     if (allPosts.length === 0) {
       const allDivs = feed.querySelectorAll('div');
-      allPosts = Array.from(allDivs).filter(div => 
+      const filtered = Array.from(allDivs).filter(div => 
         div.offsetHeight > 200 && div.querySelectorAll('a').length > 5
       );
+      allPosts = filtered.slice(0, 20); // Doar primele 20
       console.log(`  Fallback (size): ${allPosts.length} posts`);
     }
     

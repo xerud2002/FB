@@ -40,7 +40,7 @@ function loadPendingPosts() {
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">📭</div>
-          <div class="empty-state-text">Nicio postare nouă detectată încă...<br>Extensia verifică automat la fiecare 5 minute</div>
+          <div class="empty-state-text">Nicio postare nouă detectată<br>Verificare automată la fiecare 5 minute</div>
         </div>
       `;
       return;
@@ -55,22 +55,24 @@ function loadPendingPosts() {
       let postText = post.postText || `Post ${index + 1}`;
       
       // Clean up Facebook artifacts
-      if (postText.replace(/Facebook\s*/g, '').trim().length < 10) {
-        postText = `Post ${index + 1}`;
+      postText = postText.replace(/Facebook\s*/gi, '').trim();
+      if (postText.length < 10) {
+        postText = `Postare transport #${index + 1}`;
       }
       
-      const displayText = postText.length > 80 ? postText.substring(0, 80) + '...' : postText;
+      // Truncate la 100 caractere
+      const displayText = postText.length > 100 ? postText.substring(0, 100) + '...' : postText;
       const timeText = post.timeText || 'Acum';
       
       postDiv.innerHTML = `
         <div class="post-header">
           <span class="post-number">#${index + 1}</span>
-          <span class="post-time">${timeText}</span>
+          <span class="post-time">📅 ${timeText}</span>
         </div>
         <div class="post-message">${displayText}</div>
-        <div class="post-meta">Detectat ${timeAgo}</div>
+        <div class="post-meta">🕐 Detectat: ${timeAgo}</div>
         <div class="post-actions">
-          <button class="post-btn post-btn-primary openPostBtn" data-index="${index}">🚀 Deschide</button>
+          <button class="post-btn post-btn-primary openPostBtn" data-index="${index}">🚀 Deschide & Postează</button>
           <button class="post-btn post-btn-delete removePostBtn" data-index="${index}">🗑️</button>
         </div>
       `;
@@ -151,7 +153,7 @@ document.getElementById("checkNowBtn").onclick = () => {
     if (chrome.runtime.lastError) {
       console.error("Error sending message:", chrome.runtime.lastError.message);
       btn.innerHTML = '❌ Eroare!';
-      btn.style.background = 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+      btn.style.background = '#ef4444';
       setTimeout(() => {
         btn.innerHTML = originalHTML;
         btn.disabled = false;
@@ -164,7 +166,7 @@ document.getElementById("checkNowBtn").onclick = () => {
     
     if (response.status === "already_checking") {
       console.log("Check already in progress");
-      btn.innerHTML = '⏳ Verificare deja în curs...';
+      btn.innerHTML = '⏳ Verificare în curs...';
       setTimeout(() => {
         btn.innerHTML = originalHTML;
         btn.disabled = false;
@@ -176,11 +178,13 @@ document.getElementById("checkNowBtn").onclick = () => {
     
     console.log("Check triggered, response:", response);
     
-    // Așteaptă 35 secunde per grup (30s delay + 5s extra)
-    const totalWaitTime = groups.length * 35000;
+    // Timp redus: ~30s per grup (era 35s)
+    const totalWaitTime = groups.length * 30000;
     setTimeout(() => {
       btn.innerHTML = '✅ Verificat!';
-      btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+      btn.style.background = '#10b981';
+      // Reîncarcă postările
+      loadPendingPosts();
       setTimeout(() => {
         btn.innerHTML = originalHTML;
         btn.disabled = false;
