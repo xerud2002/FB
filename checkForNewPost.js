@@ -65,143 +65,18 @@ function isTimeWithinRange(timeText) {
   return { valid: false, reason: "Unknown format" };
 }
 
-// Helper function: Verifică dacă postarea conține cuvinte cheie relevante pentru servicii transport
+// Helper function: Verifică dacă postarea conține "caut" (cineva caută transport)
 function containsTransportKeywords(postElement) {
   const text = (postElement.textContent || '').toLowerCase();
   
-  // FILTRU ANTI-RECLAMĂ: Exclude postări de la transportatori care își fac reclamă
-  const advertiserKeywords = [
-    'oferim transport', 'oferim servicii', 'oferim', 'va oferim',
-    'firma de transport', 'firma transport', 'companie transport', 'firma noastra',
-    'suntem firma', 'suntem companie', 'suntem o firma', 'suntem o companie',
-    'asiguram transport', 'efectuam transport', 'executam transport', 'realizam transport',
-    'transport profesional', 'servicii profesionale', 'calitate profesionala',
-    'disponibil transport', 'disponibili pentru', 'disponibil pentru', 'disponibilitate',
-    'furnizam transport', 'prestam servicii', 'prestam transport', 'furnizam servicii',
-    'licentiat', 'autorizat', 'autorizata', 'licenta', 'autorizare',
-    'ani experienta', 'experienta de', 'ani de experienta', 'experienta in',
-    'flota proprie', 'vehicule proprii', 'masini proprii', 'dotari moderne',
-    'tarife avantajoase', 'preturi competitive', 'oferta speciala', 'pret promotional',
-    'suntem specializati', 'specializat in', 'specializata in',
-    'garantam', 'va garantam', 'garantie',
-    'profesionisti', 'profesionist', 'echipa profesionista',
-    'contact', 'contactati-ne', 'sunati', 'apelati', 'whatsapp', 'telefon',
-    'website', 'site', 'pagina noastra', 'facebook.com',
-    'putem', 'va putem', 'stim', 'va ajutam',
-    'compania noastra', 'firma mea', 'societate',
-    'certificat', 'certificate', 'acreditat'
-  ];
-  
-  // Verifică dacă e reclamă
-  for (const keyword of advertiserKeywords) {
-    if (text.includes(keyword)) {
-      console.log(`  🚫 POST RECLAMĂ: Conține "${keyword}" - transportator care face reclamă`);
-      return { relevant: false, reason: 'advertiser' };
-    }
+  // SIMPLU: Dacă conține "caut" → AFIȘEAZĂ
+  if (text.includes('caut')) {
+    console.log(`  ✅ CERERE CLIENT: Conține "caut"`);
+    return { relevant: true, service: '🚚 Transport', keyword: 'caut' };
   }
   
-  // CERERE DE LA CLIENT: Cuvinte care indică că cineva caută servicii
-  const clientRequestKeywords = [
-    'caut'
-  ];
-  
-  // Verifică dacă e cerere de la client
-  let isClientRequest = false;
-  let matchedRequestKeyword = '';
-  for (const keyword of clientRequestKeywords) {
-    if (text.includes(keyword)) {
-      isClientRequest = true;
-      matchedRequestKeyword = keyword;
-      console.log(`  ✅ CERERE CLIENT: Conține "${keyword}"`);
-      break;
-    }
-  }
-  
-  if (!isClientRequest) {
-    console.log(`  ⏭️ POST IGNORAT: Nu conține cuvinte de cerere (caut, am nevoie, etc.)`);
-    return { relevant: false, reason: 'no_request_keywords' };
-  }
-  
-  // Servicii Curierul Perfect - cuvinte cheie extinse
-  const serviceKeywords = {
-    'Transport Marfa/Colete': [
-      'transport marfa', 'transport colet', 'transport pachete', 'transport pachet',
-      'transport bagaj', 'transport cutii', 'transport cutie',
-      'marfa', 'colete', 'pachete', 'bagaje', 'cutii',
-      'trimit', 'trimitere', 'expediere', 'expediez',
-      'cargo', 'freight'
-    ],
-    'Mutari/Relocari': [
-      'mutare', 'relocare', 'mutam', 'mutari', 'relocari', 'mut',
-      'mut apartament', 'mut casa', 'mutare apartament', 'mutare casa',
-      'strămutare', 'mutare locuinta', 'schimbare domiciliu',
-      'moving', 'relocation'
-    ],
-    'Transport Mobila': [
-      'transport mobila', 'transport mobilier', 'mobila', 'mobilier',
-      'canapea', 'dulap', 'pat', 'masa', 'scaun', 'fotoliu',
-      'birou', 'comoda', 'biblioteca', 'etajera', 'biblioteca',
-      'saltea', 'noptiera', 'sifonier', 'garderoba',
-      'furniture', 'sofa', 'table', 'chair'
-    ],
-    'Curierat/Livrari': [
-      'curier', 'livrare', 'livrari', 'livrat', 'livrez',
-      'courier', 'delivery', 'livrare expres', 'livrare rapida',
-      'colet urgent', 'coletarie', 'expediere rapida'
-    ],
-    'Transport International': [
-      'transport international', 'transport extern', 'export', 'import',
-      'transport europa', 'transport strainatate', 'din romania in',
-      'international transport', 'cross border',
-      'germania', 'italia', 'spania', 'franta', 'anglia', 'uk',
-      'austria', 'belgia', 'olanda', 'elvetia', 'suedia'
-    ],
-    'Transport Auto/Masini': [
-      'transport auto', 'transport masina', 'transport vehicul', 'transport autoturism',
-      'platforma auto', 'tractare', 'remorca auto', 'remorcare',
-      'transport motocicleta', 'transport atv', 'transport scuter',
-      'car transport', 'vehicle transport'
-    ],
-    'Transport Animale': [
-      'transport animale', 'transport caini', 'transport pisici', 'transport cal',
-      'transport caine', 'transport pisica', 'pet transport', 'animale companie',
-      'transport catei', 'transport puisor', 'transport papagal',
-      'animal transport', 'pet'
-    ],
-    'Depozitare/Stocare': [
-      'depozitare', 'stocare', 'depozit', 'spatiu depozitare', 'pastrare',
-      'inchiriere depozit', 'box depozitare', 'magazie', 'self storage',
-      'storage', 'warehouse'
-    ],
-    'Servicii Ambalare': [
-      'ambalare', 'impachetare', 'ambalat', 'ambalaj', 'impachetat',
-      'materiale ambalare', 'folie bule', 'cutii carton',
-      'carton', 'scotch', 'bubble wrap', 'packing'
-    ]
-  };
-  
-  // Verifică fiecare serviciu
-  let foundService = null;
-  let foundKeyword = null;
-  
-  for (const [service, keywords] of Object.entries(serviceKeywords)) {
-    for (const keyword of keywords) {
-      if (text.includes(keyword)) {
-        foundService = service;
-        foundKeyword = keyword;
-        break;
-      }
-    }
-    if (foundService) break;
-  }
-  
-  if (foundService) {
-    console.log(`  ✅ POST RELEVANT CLIENT: "${foundKeyword}" → Serviciu: ${foundService}`);
-    return { relevant: true, service: foundService, keyword: foundKeyword };
-  } else {
-    console.log(`  ⏭️ POST IGNORAT: Nu conține cuvinte cheie pentru servicii specifice`);
-    return { relevant: false, reason: 'no_service_keywords' };
-  }
+  console.log(`  ⏭️ POST IGNORAT: Nu conține "caut"`);
+  return { relevant: false, reason: 'no_caut_keyword' };
 }
 
 // Helper function: Extrage permalink și timestamp din postare
