@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// Helper function: Verifică dacă timestamp-ul e în intervalul acceptat (ultima săptămână = 7 zile)
+// Helper function: Verifică dacă timestamp-ul e în intervalul acceptat (ultimele 12 ore)
 function isTimeWithinRange(timeText) {
   const t = timeText.toLowerCase();
   
@@ -26,40 +26,39 @@ function isTimeWithinRange(timeText) {
     return { valid: true, reason: "Just now" };
   }
   
-  // Minutes (0-10080 = 7 days)
+  // Minutes (0-720 = 12 ore)
   const minMatch = t.match(/(\d+)\s*(m|min|mins|minute|minutes|minut)/i);
   if (minMatch) {
     const minutes = parseInt(minMatch[1]);
-    return { valid: minutes <= 10080, reason: `${minutes} minutes` };
+    return { valid: minutes <= 720, reason: `${minutes} minutes` };
   }
   
-  // Hours (0-168 = 7 days)
+  // Hours (0-12 ore)
   const hourMatch = t.match(/(\d+)\s*(h|hr|hour|hours|oră|ore)/i);
   if (hourMatch) {
     const hours = parseInt(hourMatch[1]);
-    return { valid: hours <= 168, reason: `${hours} hours (last week)` };
+    return { valid: hours <= 12, reason: `${hours} hours` };
   }
   
-  // Days (1-7 days)
+  // Days - REJECTEAZĂ (orice zi e > 12 ore)
   const dayMatch = t.match(/(\d+)\s*(d|day|days|zi|zile)/i);
   if (dayMatch) {
-    const days = parseInt(dayMatch[1]);
-    return { valid: days <= 7, reason: `${days} days (within week)` };
+    return { valid: false, reason: "More than 12 hours old" };
   }
   
-  // "Yesterday" / "Ieri" - ACCEPTĂ
+  // "Yesterday" / "Ieri" - REJECTEAZĂ
   if (t.match(/yesterday|ieri/i)) {
-    return { valid: true, reason: "Yesterday (within week)" };
+    return { valid: false, reason: "More than 12 hours old" };
   }
   
-  // Named weekdays within last week - ACCEPTĂ
+  // Named weekdays - REJECTEAZĂ
   if (t.match(/monday|tuesday|wednesday|thursday|friday|saturday|sunday|luni|marți|miercuri|joi|vineri|sâmbătă|duminică/i)) {
-    return { valid: true, reason: "This week" };
+    return { valid: false, reason: "More than 12 hours old" };
   }
   
   // Weeks/months - REJECTEAZĂ
   if (t.match(/\d+\s*(w|week|weeks|săptămân|month|luni)/i)) {
-    return { valid: false, reason: "More than 1 week old" };
+    return { valid: false, reason: "More than 12 hours old" };
   }
   
   return { valid: false, reason: "Unknown format" };
@@ -378,10 +377,10 @@ function scanFeed() {
     });
     
     console.log(`\n=== SUMMARY ===`);
-    console.log(`✅ Posts with "caut transport" keywords: ${postsToday.length}`);
+    console.log(`✅ Posts with "caut" keywords: ${postsToday.length}`);
     console.log(`📊 Total scanned: ${allPosts.length}`);
     console.log(`📍 Group: ${currentGroupName}`);
-    console.log(`📅 Time range: Last 7 days`);
+    console.log(`⏰ Time range: Last 12 hours`);
     
     // Send results
     if (postsToday.length > 0) {
@@ -399,7 +398,7 @@ function scanFeed() {
       });
     } else {
       console.warn("⚠️ No relevant posts found");
-      console.log("ℹ️ Posts must contain keywords like 'caut transport' and be from last 7 days");
+      console.log("ℹ️ Posts must contain 'caut' keyword and be from last 12 hours");
       chrome.runtime.sendMessage({ 
         type: "posts_from_today", 
         posts: [],
