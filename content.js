@@ -1,217 +1,152 @@
-﻿// Facebook Group Scanner - Content Script v2
-// Se incarca automat pe paginile de grupuri Facebook
-
+﻿// Content Script v4
 (function() {
-  console.log("[Scanner] Loaded on:", window.location.href);
+  console.log("[S] Loaded:", location.href);
+  if (!location.href.includes("/groups/")) return;
+  if (window._sc) return;
+  window._sc = true;
 
-  // Verifica daca suntem pe un grup Facebook
-  if (!window.location.href.includes("/groups/")) {
-    console.log("[Scanner] Not a group page, exiting");
-    return;
-  }
-
-  // Flag pentru a nu scana de mai multe ori
-  if (window.__fbScannerLoaded) {
-    console.log("[Scanner] Already loaded, skipping");
-    return;
-  }
-  window.__fbScannerLoaded = true;
-
-  // Asculta comenzi de la background
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-    console.log("[Scanner] Message received:", msg.type);
+    console.log("[S] Message:", msg.type);
     
     if (msg.type === "scan_now") {
-      doScan(msg.groupName).then(posts => {
-        sendResponse({ posts: posts });
-      });
+      scan(msg.groupName).then(r => sendResponse({posts: r}));
       return true;
     }
     
     if (msg.type === "type_comment") {
-      typeInCommentBox(msg.text);
-      sendResponse({ ok: true });
+      typeComment(msg.text);
+      sendResponse({ok:true});
     }
   });
 
-  // Functie pentru a parsa timpul (ex: "2h" -> 2 ore)
-  function parseTimeAgo(timeStr) {
-    if (!timeStr) return 999;
-    const str = timeStr.toLowerCase().trim();
+  async function scan(groupName) {
+    console.log("[S] Waiting for feed...");
     
-    // "Just now", "Acum"
-    if (str.includes("now") || str === "acum") return 0;
-    
-    // "Xm" sau "X min"
-    let match = str.match(/^(\d+)\s*m(in)?/);
-    if (match) return parseInt(match[1]) / 60;
-    
-    // "Xh" sau "X hour/ora/ore"
-    match = str.match(/^(\d+)\s*(h|hour|ora|ore)/);
-    if (match) return parseInt(match[1]);
-    
-    // "Xd" sau "X day/zi/zile"
-    match = str.match(/^(\d+)\s*(d|day|zi)/);
-    if (match) return parseInt(match[1]) * 24;
-    
-    // "Yesterday/Ieri"
-    if (str.includes("yesterday") || str.includes("ieri")) return 24;
-    
-    return 999; // prea vechi
-  }
-
-  // Scaneaza feed-ul
-  async function doScan(groupName) {
-    console.log("[Scanner] Starting scan...");
-    
-    // Scroll pentru a incarca postari
-    for (let i = 0; i < 6; i++) {
-      window.scrollBy(0, 1200);
-      await delay(700);
+    // Asteapta pana apar articole (max 20 sec)
+    let articles = [];
+    for (let i = 0; i < 20; i++) {
+      articles = document.querySelectorAll('[role="article"]');
+      console.log("[S] Check", i, "- found", articles.length);
+      if (articles.length >= 3) break;
+      window.scrollBy(0, 500);
+      await sleep(1000);
     }
-    window.scrollTo(0, 0);
-    await delay(300);
     
-    // Gaseste postarile
-    const articles = document.querySelectorAll('[role="article"]');
-    console.log("[Scanner] Found", articles.length, "articles");
+    if (articles.length === 0) {
+      console.log("[S] No articles found!");
+      return [];
+    }
+    
+    // Scroll mai mult
+    console.log("[S] Scrolling...");
+    for (let i = 0; i < 5; i++) {
+      window.scrollBy(0, 1500);
+      await sleep(800);
+    }
+    
+    // Re-query dupa scroll
+    articles = document.querySelectorAll('[role="article"]');
+    console.log("[S] After scroll:", articles.length, "articles");
     
     const results = [];
-    const keywords = ["caut", "cine duce", "cine aduce"];
-    const MAX_HOURS = 8;
+    const kws = ["caut", "cine duce", "cine aduce"];
     
     for (let i = 0; i < Math.min(articles.length, 30); i++) {
-      const article = articles[i];
-      const text = (article.textContent || "").toLowerCase();
+      const a = articles[i];
+      const txt = (a.textContent || "").toLowerCase();
       
-      // Verifica keywords
-      let matchedKeyword = null;
-      for (const kw of keywords) {
-        if (text.includes(kw)) {
-          matchedKeyword = kw;
-          break;
-        }
-      }
+      let kw = kws.find(k => txt.includes(k));
+      if (!kw) continue;
       
-      if (!matchedKeyword) continue;
+      const time = getTime(a);
+      const hrs = parseHrs(time);
       
-      // Gaseste timpul
-      const timeText = findTime(article);
-      const hoursAgo = parseTimeAgo(timeText);
+      console.log("[S]", i, "kw:", kw, "time:", time, "hrs:", hrs);
       
-      console.log("[Scanner] Post", i, "keyword:", matchedKeyword, "time:", timeText, "hours:", hoursAgo);
+      if (hrs > 8) continue;
       
-      // Filtru 8 ore
-      if (hoursAgo > MAX_HOURS) {
-        console.log("[Scanner] Post too old, skipping");
-        continue;
-      }
-      
-      // Gaseste URL
-      const url = findUrl(article);
-      if (!url) {
-        console.log("[Scanner] No URL found, skipping");
-        continue;
-      }
-      
-      // Extrage text
-      const postContent = findContent(article);
+      const url = getUrl(a);
+      if (!url) continue;
       
       results.push({
-        postId: extractId(url) || ("p" + Date.now() + i),
+        postId: url.match(/\/(\d+)\/?$/)?.[1] || ("p"+Date.now()+i),
         postUrl: url,
-        postText: postContent,
-        timeText: timeText,
-        keyword: matchedKeyword,
-        groupName: groupName || "Unknown"
+        postText: getContent(a),
+        timeText: time,
+        keyword: kw,
+        groupName: groupName
       });
-      
-      console.log("[Scanner] Added post:", url);
+      console.log("[S] Added:", url);
     }
     
-    console.log("[Scanner] Scan complete, found", results.length, "matching posts");
+    console.log("[S] Total:", results.length);
+    
+    // Send backup
+    if (results.length > 0) {
+      chrome.runtime.sendMessage({type:"scan_results", posts:results});
+    }
+    
     return results;
   }
 
-  function findTime(article) {
-    // Cauta linkuri cu text de timp
-    const links = article.querySelectorAll("a");
-    for (const link of links) {
-      const t = (link.textContent || "").trim();
+  function getTime(el) {
+    for (const a of el.querySelectorAll("a")) {
+      const t = a.textContent?.trim() || "";
       if (/^\d+[smhd]$/i.test(t)) return t;
-      if (/^\d+\s*(min|sec|hour|ora|ore|zi|day)/i.test(t)) return t;
-      if (/^(just now|acum|ieri|yesterday)/i.test(t)) return t;
+      if (/^\d+\s*(min|ora|ore|hour)/i.test(t)) return t;
+      if (/^(acum|just|ieri)/i.test(t)) return t;
     }
     return "";
   }
 
-  function findUrl(article) {
-    const links = article.querySelectorAll("a[href]");
-    
-    for (const link of links) {
-      const href = link.getAttribute("href") || "";
-      const t = (link.textContent || "").trim();
+  function parseHrs(s) {
+    if (!s) return 999;
+    s = s.toLowerCase();
+    if (s.includes("now") || s === "acum") return 0;
+    let m = s.match(/(\d+)\s*m/); if (m) return +m[1]/60;
+    m = s.match(/(\d+)\s*h/); if (m) return +m[1];
+    m = s.match(/(\d+)\s*(ora|ore)/); if (m) return +m[1];
+    m = s.match(/(\d+)\s*d/); if (m) return +m[1]*24;
+    if (s.includes("ieri")) return 24;
+    return 999;
+  }
+
+  function getUrl(el) {
+    for (const a of el.querySelectorAll("a[href]")) {
+      const h = a.getAttribute("href") || "";
+      const t = a.textContent?.trim() || "";
       
-      // Link de timp = permalink
-      if (/^\d+[smhd]$/i.test(t) || /^\d+\s*(min|ora|ore|hour)/i.test(t)) {
-        if (href.includes("/groups/")) {
-          const clean = href.split("?")[0];
-          return clean.startsWith("http") ? clean : "https://www.facebook.com" + clean;
+      // Time links = permalinks
+      if (/^\d+[smhd]$/i.test(t) || /^\d+\s*(min|ora)/i.test(t)) {
+        if (h.includes("/groups/")) {
+          return h.startsWith("http") ? h.split("?")[0] : "https://www.facebook.com" + h.split("?")[0];
         }
       }
-      
-      // URL direct de post
-      if (href.includes("/posts/") || href.includes("/permalink/")) {
-        const clean = href.split("?")[0];
-        return clean.startsWith("http") ? clean : "https://www.facebook.com" + clean;
+      if (h.includes("/posts/") || h.includes("/permalink/")) {
+        return h.startsWith("http") ? h.split("?")[0] : "https://www.facebook.com" + h.split("?")[0];
       }
     }
-    
-    // Fallback: cauta in HTML
-    const m = article.innerHTML.match(/\/groups\/(\d+)\/posts\/(\d+)/);
-    if (m) {
-      return "https://www.facebook.com/groups/" + m[1] + "/posts/" + m[2] + "/";
-    }
-    
     return null;
   }
 
-  function findContent(article) {
-    const els = article.querySelectorAll('div[dir="auto"], span[dir="auto"]');
+  function getContent(el) {
     let best = "";
-    
-    for (const el of els) {
-      const t = (el.textContent || "").trim();
-      if (t.length > best.length && t.length > 15) {
-        if (!/^(like|comment|share|vezi|see|follow|\d+ comm)/i.test(t)) {
-          best = t;
-        }
+    for (const d of el.querySelectorAll('div[dir="auto"]')) {
+      const t = d.textContent?.trim() || "";
+      if (t.length > best.length && t.length > 20 && !/^(like|share|comment)/i.test(t)) {
+        best = t;
       }
     }
-    
-    return best.substring(0, 280).replace(/\s+/g, " ");
+    return best.substring(0, 200);
   }
 
-  function extractId(url) {
-    const m = url.match(/\/posts\/(\d+)/);
-    return m ? m[1] : null;
-  }
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-  function delay(ms) {
-    return new Promise(r => setTimeout(r, ms));
-  }
-
-  function typeInCommentBox(text) {
-    const boxes = document.querySelectorAll('[contenteditable="true"][role="textbox"]');
-    for (const box of boxes) {
-      if (box.offsetParent) {
-        box.focus();
-        document.execCommand("selectAll", false, null);
-        document.execCommand("insertText", false, text);
-        box.dispatchEvent(new Event("input", { bubbles: true }));
-        return;
-      }
+  function typeComment(text) {
+    const box = document.querySelector('[contenteditable="true"][role="textbox"]');
+    if (box) {
+      box.focus();
+      document.execCommand("insertText", false, text);
     }
   }
-
 })();
