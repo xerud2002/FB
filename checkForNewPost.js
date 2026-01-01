@@ -14,40 +14,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// Helper function: Verifică dacă timestamp-ul e în intervalul acceptat
+// Helper function: Verifică dacă timestamp-ul e în intervalul acceptat (ultima zi = 24h)
 function isTimeWithinRange(timeText) {
   const t = timeText.toLowerCase();
   
-  // Debug mode: acceptă unknown
-  if (t === 'unknown') return { valid: true, reason: "Unknown (debug)" };
+  // Acceptă timestamp unknown
+  if (t === 'unknown') return { valid: true, reason: "Unknown timestamp" };
   
   // Just now / acum / seconds
-  if (t.includes('just now') || t.includes('acum') || t === 'now' || t.includes('seconds') || t.includes('secunde')) {
+  if (t.includes('just now') || t.includes('acum') || t === 'now' || t.includes('second') || t.includes('secund')) {
     return { valid: true, reason: "Just now" };
   }
   
-  // Minutes
-  const minMatch = t.match(/(\d+)\s*(m|min|mins|minute|minutes)/i);
+  // Minutes (0-1439 = 24 hours)
+  const minMatch = t.match(/(\d+)\s*(m|min|mins|minute|minutes|minut)/i);
   if (minMatch) {
     const minutes = parseInt(minMatch[1]);
-    return { valid: minutes <= 59, reason: `${minutes} minutes` };
+    return { valid: minutes <= 1439, reason: `${minutes} minutes` };
   }
   
-  // Hours (debug: accept up to 24h)
-  const hourMatch = t.match(/(\d+)\s*(h|hr|hour|oră|ore)/i);
+  // Hours (0-24)
+  const hourMatch = t.match(/(\d+)\s*(h|hr|hour|hours|oră|ore)/i);
   if (hourMatch) {
     const hours = parseInt(hourMatch[1]);
-    return { valid: hours <= 24, reason: `${hours} hours (DEBUG: 24h max)` };
+    return { valid: hours <= 24, reason: `${hours} hours (last 24h)` };
   }
   
-  // Days/weeks/months - reject
+  // "Yesterday" / "Ieri" - ACCEPTĂ (probabil 12-24h în urmă)
+  if (t.match(/yesterday|ieri/i)) {
+    return { valid: true, reason: "Yesterday (within 24h)" };
+  }
+  
+  // Days/weeks/months - REJECTEAZĂ
   if (t.match(/\d+\s*(d|day|days|zi|zile|w|week|weeks|săptămân|month|luni)/i)) {
-    return { valid: false, reason: "Days/weeks/months old" };
+    return { valid: false, reason: "More than 1 day old" };
   }
   
-  // Named days - reject
-  if (t.match(/yesterday|ieri|monday|tuesday|luni|marți/i)) {
-    return { valid: false, reason: "Named day" };
+  // Named weekdays - REJECTEAZĂ (prea vechi)
+  if (t.match(/monday|tuesday|wednesday|thursday|friday|saturday|sunday|luni|marți|miercuri|joi|vineri|sâmbătă|duminică/i)) {
+    return { valid: false, reason: "Named weekday (too old)" };
   }
   
   return { valid: false, reason: "Unknown format" };
