@@ -88,11 +88,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Verificare manuală din popup
   if (message.type === "check_groups_now") {
     console.log("Manual check triggered!");
+    console.log("Groups to check:", groups);
+    console.log("Number of groups:", groups.length);
+    
     groups.forEach((group, index) => {
+      const delay = index * 5000;
+      console.log(`Scheduling checkGroup for "${group.name}" with delay ${delay}ms`);
+      
       setTimeout(() => {
+        console.log(`Now calling checkGroup for "${group.name}"`);
         checkGroup(group);
-      }, index * 5000);
+      }, delay);
     });
+    
     sendResponse({ status: "checking" });
     return true;
   }
