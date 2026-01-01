@@ -377,7 +377,7 @@ setTimeout(() => {
     // Scroll pentru a încărca mai multe postări
     console.log("📜 Scrolling to load more posts...");
     let scrollAttempts = 0;
-    const maxScrolls = 5;
+    const maxScrolls = 12;
     
     const scrollInterval = setInterval(() => {
       window.scrollTo(0, document.body.scrollHeight);
@@ -389,7 +389,7 @@ setTimeout(() => {
         console.log("✅ Scroll complete, starting scan...");
         scanFeed();
       }
-    }, 2000);
+    }, 5000);
     
   } catch (err) {
     console.error("❌ Fatal error:", err);

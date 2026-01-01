@@ -95,7 +95,8 @@ function checkGroup(group) {
       });
     }, 2000);
 
-    // Închide tab-ul după 25 secunde (script așteaptă 10s + 15s buffer)
+    // Închide tab-ul după ce scanarea e completă
+    // Timing: 10s initial wait + 60s scroll (12×5s) + 20s processing = 90s
     setTimeout(() => {
       console.log(`[checkGroup] Closing tab ${tabId}...`);
       chrome.tabs.remove(tabId, () => {
@@ -105,7 +106,7 @@ function checkGroup(group) {
           console.log(`[checkGroup] ✅ Tab ${tabId} closed`);
         }
       });
-    }, 25000);
+    }, 100000); // 100 secunde = 10s wait + 60s scroll + 30s buffer
   });
 }
 
