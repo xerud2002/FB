@@ -139,157 +139,117 @@ function containsTransportKeywords(postElement) {
 
 // Helper function: Extrage permalink și timestamp din postare
 function extractPostInfo(post) {
-  const allLinks = post.querySelectorAll('a');
+  const allLinks = post.querySelectorAll('a[href]');
   let postUrl = null;
   let timeText = '';
-  let timestampLink = null;
   
   console.log(`  📊 Total links found: ${allLinks.length}`);
   
-  // PRIORITATE 1: Găsește timestamp PRIMUL - acesta e de obicei linkul către post!
+  // METODA 1: Caută link-ul cu timestamp (cel mai de încredere!)
+  // Facebook pune timestampul ca link direct la post
   for (const link of allLinks) {
-    const text = (link.innerText || link.textContent || '').trim();
-    const ariaLabel = link.getAttribute('aria-label') || '';
     const href = link.href || '';
+    const text = (link.innerText || link.textContent || '').trim();
     
-    // Match time patterns: "2m", "5 min", "1h", "3 hours ago", etc.
-    if (text.match(/^\d+\s*(s|sec|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|oră|ore|zi|zile)\s*(ago)?$/i)) {
-      timeText = text.replace(/\s*ago\s*/i, '').trim();
-      timestampLink = link;
-      postUrl = href.split('?')[0]; // Timestamp link IS the post link!
-      console.log(`  ⏰✅ Found timestamp link: "${timeText}" → ${postUrl.substring(0, 80)}`);
-      break;
-    }
+    // Skip links fără href valid
+    if (!href || href === '#' || href.includes('javascript:')) continue;
     
-    // Check aria-label for time
-    if (!timeText && ariaLabel) {
-      const ariaMatch = ariaLabel.match(/(\d+)\s*(second|seconds|minute|minutes|hour|hours|day|days|week|min|m|h|s|sec|d|w|oră|ore|zi|zile)/i);
-      if (ariaMatch) {
-        timeText = ariaMatch[0];
-        timestampLink = link;
+    // Caută patterns de timp: "4m", "2h", "1d", "December 30", etc.
+    const isTimeLink = text.match(/^(\d+\s*(s|sec|m|min|h|hr|d|w|ore?|zi|săpt)[a-zăâîșț]*\.?\s*(ago)?|just now|acum|yesterday|ieri|\w+\s+\d{1,2}(,?\s*\d{4})?(\s+at\s+\d+:\d+\s*(AM|PM)?)?|december|ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|septembrie|octombrie|noiembrie)/i);
+    
+    if (isTimeLink && href.includes('facebook.com')) {
+      // Verifică dacă e link la post (nu la profil sau altceva)
+      if (href.includes('/posts/') || href.includes('/permalink/') || href.includes('story_fbid') || href.match(/\/groups\/\d+\/\d+/)) {
         postUrl = href.split('?')[0];
-        console.log(`  ⏰✅ Found timestamp in aria-label: "${timeText}" → ${postUrl.substring(0, 80)}`);
+        timeText = text;
+        console.log(`  ⏰✅ Timestamp link found: "${text}" → ${postUrl.substring(0, 80)}`);
         break;
       }
     }
   }
   
-  // METODA 2: Dacă nu am găsit via timestamp, caută pattern-uri URL cunoscute
+  // METODA 2: Caută direct URL-uri cu pattern de post
   if (!postUrl) {
-    console.log(`  🔍 Searching for URL patterns...`);
-    for (let i = 0; i < allLinks.length; i++) {
-      const link = allLinks[i];
-      const href = link.href || '';
-    
-    // Log primele 5 link-uri pentru debug
-    if (i < 5) {
-      console.log(`  Link ${i+1}: ${href.substring(0, 100)}...`);
-    }
-    
-    // Pattern 1: Full Facebook group post URL
-    if (href.match(/facebook\.com\/groups\/\d+\/posts\//)) {
-      postUrl = href.split('?')[0]; // Remove query params
-      console.log(`  ✅ Pattern 1 - Full group post URL`);
-      break;
-    }
-    
-    // Pattern 2: Permalink style
-    if (href.match(/facebook\.com\/groups\/\d+\/permalink\//)) {
-      postUrl = href.split('?')[0];
-      console.log(`  ✅ Pattern 2 - Permalink style`);
-      break;
-    }
-    
-    // Pattern 3: story_fbid in URL
-    if (href.includes('story_fbid=') && href.includes('facebook.com')) {
-      postUrl = href;
-      console.log(`  ✅ Pattern 3 - story_fbid URL`);
-      break;
-    }
-    
-    // Pattern 4: Relative URL starting with /groups/
-    if (href.startsWith('/groups/') && href.includes('/posts/')) {
-      postUrl = 'https://www.facebook.com' + href.split('?')[0];
-      console.log(`  ✅ Pattern 4 - Relative URL`);
-      break;
-    }
-    
-    // Pattern 5: Any facebook.com URL with /posts/
-    if (href.includes('facebook.com') && href.includes('/posts/')) {
-      postUrl = href.split('?')[0];
-      console.log(`  ✅ Pattern 5 - Any FB /posts/ URL`);
-      break;
-    }
-    } // Close for loop
-  }
-  
-  // Log status
-  if (!postUrl) {
-    console.log(`  ⚠️ No permalink found via patterns`);
-  }
-  
-  // FALLBACK 1: Caută timestamp în text dacă nu l-am găsit
-  if (!timeText) {
-    const postText = post.textContent || '';
-    const timePatterns = [
-      /(\d+)\s*s(?:ec)?(?:onds?)?\b/i,
-      /(\d+)\s*m(?:in)?(?:ute)?(?:s)?\b/i,
-      /(\d+)\s*h(?:r)?(?:our)?(?:s)?\b/i,
-      /(\d+)\s*d(?:ay)?(?:s)?\b/i,
-      /(\d+)\s*w(?:eek)?(?:s)?\b/i,
-      /(\d+)\s*or[ăe]\b/i,
-      /(\d+)\s*zi(?:le)?\b/i
-    ];
-    
-    for (const pattern of timePatterns) {
-      const match = postText.match(pattern);
-      if (match) {
-        timeText = match[0];
-        console.log(`  ⏰ Timestamp in text: "${timeText}"`);
-        break;
-      }
-    }
-  }
-  
-  // FALLBACK 2: Caută ORICE link facebook.com care arată ca un post
-  if (!postUrl) {
-    console.log(`  🔍 FALLBACK 2: Searching all facebook.com links...`);
+    console.log(`  🔍 Searching for post URL patterns...`);
     for (const link of allLinks) {
       const href = link.href || '';
-      if (href.includes('facebook.com') && (href.includes('/posts/') || href.includes('/permalink/') || href.includes('?__cft__'))) {
+      
+      // Pattern: /groups/ID/posts/POSTID sau /groups/ID/permalink/POSTID
+      if (href.match(/facebook\.com\/groups\/\d+\/(posts|permalink)\/\d+/)) {
+        postUrl = href.split('?')[0];
+        console.log(`  ✅ Found post URL pattern: ${postUrl.substring(0, 80)}`);
+        break;
+      }
+      
+      // Pattern: story_fbid
+      if (href.includes('story_fbid=')) {
         postUrl = href;
-        console.log(`  ✅ Found FB link: ${postUrl}`);
+        console.log(`  ✅ Found story_fbid URL`);
+        break;
+      }
+      
+      // Pattern: pfbid (new Facebook format)
+      if (href.match(/facebook\.com\/groups\/[^\/]+\/posts\/pfbid/)) {
+        postUrl = href.split('?')[0];
+        console.log(`  ✅ Found pfbid URL: ${postUrl.substring(0, 80)}`);
         break;
       }
     }
   }
   
-  // FALLBACK 3: Construiește URL din HTML dacă nu s-a găsit
+  // METODA 3: Caută în HTML pentru IDs ascunse
   if (!postUrl) {
-    console.log(`  🔍 FALLBACK 3: Searching HTML for IDs...`);
-    const postHtml = post.innerHTML || '';
-    const storyMatch = postHtml.match(/story_fbid[=\/](\d+)/);
-    const pfbidMatch = postHtml.match(/(pfbid[A-Za-z0-9]+)/);
+    console.log(`  🔍 Searching HTML for hidden IDs...`);
+    const postHtml = post.outerHTML || '';
     
-    if (storyMatch || pfbidMatch) {
-      const groupId = window.location.pathname.split('/')[2];
-      const storyId = storyMatch ? storyMatch[1] : pfbidMatch[1];
-      postUrl = `https://www.facebook.com/groups/${groupId}/posts/${storyId}/`;
-      console.log(`  🔨 URL constructed from HTML: ${postUrl}`);
-    } else {
-      console.log(`  ❌ No story_fbid or pfbid found in HTML`);
+    // Caută story_fbid în atribute
+    const storyMatch = postHtml.match(/story_fbid[=:](\d+)/);
+    const pfbidMatch = postHtml.match(/(pfbid[A-Za-z0-9]{20,})/);
+    const postIdMatch = postHtml.match(/\/posts\/(\d{10,})/);
+    
+    const groupId = window.location.pathname.match(/\/groups\/(\d+)/)?.[1];
+    
+    if (groupId && (storyMatch || pfbidMatch || postIdMatch)) {
+      const postId = postIdMatch?.[1] || storyMatch?.[1] || pfbidMatch?.[1];
+      postUrl = `https://www.facebook.com/groups/${groupId}/posts/${postId}/`;
+      console.log(`  🔨 Constructed URL: ${postUrl}`);
     }
   }
   
-  // FALLBACK 4: Dacă avem URL dar nu timestamp, acceptă ca "necunoscut"
-  if (postUrl && !timeText) {
-    timeText = "unknown";
-    console.log(`  ⚠️ No timestamp found, using "unknown"`);
+  // METODA 4: Caută "See more" sau alte link-uri de tip permalink
+  if (!postUrl) {
+    console.log(`  🔍 Searching for See more / expand links...`);
+    const seeMoreLinks = post.querySelectorAll('a[role="button"], a[aria-expanded]');
+    for (const link of seeMoreLinks) {
+      const href = link.href || '';
+      if (href.includes('/posts/') || href.includes('/permalink/')) {
+        postUrl = href.split('?')[0];
+        console.log(`  ✅ Found via See more: ${postUrl.substring(0, 80)}`);
+        break;
+      }
+    }
   }
   
-  // Final check
-  if (!postUrl) {
-    console.log(`  ❌ FAILED: No permalink found after all fallbacks!`);
+  // Extract timestamp dacă nu l-am găsit încă
+  if (!timeText) {
+    // Caută în text pentru patterns de timp
+    const timeElements = post.querySelectorAll('a[href*="facebook.com"], span[id]');
+    for (const el of timeElements) {
+      const text = (el.textContent || '').trim();
+      if (text.match(/^\d+\s*(s|m|h|d|w|min|ore?|zi)/i) || text.match(/^(just now|acum|yesterday|ieri)/i)) {
+        timeText = text;
+        break;
+      }
+    }
+    
+    if (!timeText) timeText = 'Acum';
+  }
+  
+  // Final logging
+  if (postUrl) {
+    console.log(`  ✅ Final URL: ${postUrl.substring(0, 80)}`);
+  } else {
+    console.log(`  ⚠️ No URL found - will skip this post!`);
   }
   
   return { postUrl, timeText };
@@ -406,15 +366,18 @@ function scanFeed() {
         // Extract info (best effort - dacă nu găsește, folosește fallback)
         const { postUrl, timeText } = extractPostInfo(post);
         
-        // Dacă nu are URL, creează unul din group URL
-        const finalUrl = postUrl || window.location.href;
+        // IMPORTANT: Dacă nu avem URL valid, SKIP această postare!
+        if (!postUrl) {
+          console.log(`  ⚠️ SKIPPING post - no valid URL found`);
+          return;
+        }
         
         // Dacă nu are timestamp, folosește "Acum"
         const finalTime = timeText || "Acum";
         
-        // Extract ID (garantat să existe)
-        const postId = postUrl ? extractPostId(postUrl, post, index) : `post_${Date.now()}_${index}`;
-        const fullUrl = finalUrl.startsWith('http') ? finalUrl : 'https://www.facebook.com' + finalUrl;
+        // Extract ID din URL
+        const postId = extractPostId(postUrl, post, index);
+        const fullUrl = postUrl.startsWith('http') ? postUrl : 'https://www.facebook.com' + postUrl;
         
         postsToday.push({ 
           postId, 

@@ -51,38 +51,27 @@ function loadPendingPosts() {
       const postDiv = document.createElement("div");
       postDiv.className = "post-card";
       
-      // Format time nicely
       const timeAgo = getTimeAgo(post.timestamp);
-      
-      // Post text (max 120 chars for compact display)
       let postText = post.postText || `Post ${index + 1}`;
       
-      // If text is just "Facebook" repeated, use fallback
+      // Clean up Facebook artifacts
       if (postText.replace(/Facebook\s*/g, '').trim().length < 10) {
         postText = `Post ${index + 1}`;
       }
       
-      const displayText = postText.length > 120 ? postText.substring(0, 120) + '...' : postText;
+      const displayText = postText.length > 80 ? postText.substring(0, 80) + '...' : postText;
       const timeText = post.timeText || 'Acum';
       
       postDiv.innerHTML = `
         <div class="post-header">
           <span class="post-number">#${index + 1}</span>
-          <span class="post-time">📅 ${timeText}</span>
+          <span class="post-time">${timeText}</span>
         </div>
-        <div class="post-message">
-          ${displayText}
-        </div>
-        <div class="post-meta">
-          <span class="post-detected">🕒 Detectat: ${timeAgo}</span>
-        </div>
+        <div class="post-message">${displayText}</div>
+        <div class="post-meta">Detectat ${timeAgo}</div>
         <div class="post-actions">
-          <button class="post-btn post-btn-primary openPostBtn" data-index="${index}">
-            🚀 Deschide & Postează
-          </button>
-          <button class="post-btn post-btn-delete removePostBtn" data-index="${index}">
-            🗑️
-          </button>
+          <button class="post-btn post-btn-primary openPostBtn" data-index="${index}">🚀 Deschide</button>
+          <button class="post-btn post-btn-delete removePostBtn" data-index="${index}">🗑️</button>
         </div>
       `;
       

@@ -1,47 +1,62 @@
-# Facebook Group Assistant - Copilot Instructions
+# 🚚 Curierul Perfect Assistant
 
-## Project Overview
-This is a Chrome/Edge extension (Manifest V3) that automates Facebook group interactions. It monitors a specific Facebook group for new posts, generates AI-powered comments using OpenAI's API, and automatically posts them.
+> Chrome/Edge MV3 extension for monitoring Romanian transport Facebook groups.  
+> Detects posts with **"caut"** keyword → queues for review → auto-types promotional comments.
 
-## Architecture & Data Flow
+---
 
-### Three-Part Extension Architecture
-1. **Background Service Worker** ([background.js](background.js))
-   - Creates alarm to check group every 5 minutes
-   - Opens group URL in background tab, injects `checkForNewPost.js`, closes tab after 15s
-   - Listens for post detection messages and shows desktop notification when new post found
-   - Stores `lastPostId` to prevent duplicate notifications
+## 📁 File Structure
 
-2. **Content Script** ([content.js](content.js))
-   - Injected automatically on `*://www.facebook.com/groups/*` pages
-   - Retrieves stored comment text from `chrome.storage.local`
-   - Uses interval polling to find comment boxes: `[contenteditable="true"][role="textbox"]`
-   - Simulates typing via `document.execCommand("insertText")` for React compatibility
-   - Auto-clicks Facebook's `div[role="button"][aria-label="Comment"]` after 500ms delay
-
-3. **Popup UI** ([popup.html](popup.html) + [popup.js](popup.js))
-   - Dropdown to select target Facebook group
-   - Prompt type selector (review request vs. verification reminder)
-   - Calls OpenAI API (gpt-3.5-turbo) to generate short comments (15-20 words)
-   - Always ensures "daiostea.ro" link is included
-   - Stores generated comment in `chrome.storage.local` and opens group in new tab
-
-### Critical Workflow
 ```
-User clicks "Genereaza" → OpenAI generates comment → User clicks "Posteaza" 
-→ Comment stored + new tab opens → content.js detects comment box → Auto-types and submits
+├── background.js      # Service worker: alarms, tabs, message routing
+├── checkForNewPost.js # Feed scanner (injected dynamically)
+├── content.js         # Comment auto-typer (auto-injected on FB groups)
+├── popup.html/js      # Extension UI
+├── styles.css         # Popup styling
+└── manifest.json      # Extension config (MV3)
 ```
 
-## Facebook DOM Interaction Patterns
+---
 
-### Comment Box Detection
-Facebook uses dynamic React-rendered elements. Target elements by:
-- `[contenteditable="true"][role="textbox"]` for input areas
-- Check `offsetParent !== null` to ensure visibility
-- Verify parent has `aria-label` containing "comment" (case-insensitive)
+## 🔄 Data Flow
 
-### Typing Simulation (React-Compatible)
+```mermaid
+graph LR
+    A[⏰ Alarm 5min] --> B[Open hidden tab]
+    B --> C[Inject checkForNewPost.js]
+    C --> D[Scroll & scan feed]
+    D --> E{Contains 'caut'?}
+    E -->|Yes| F[Store in pendingPosts]
+    E -->|No| G[Skip]
+    F --> H[🔔 Notification]
+    H --> I[User clicks 'Deschide']
+    I --> J[content.js auto-types comment]
+```
+
+### Storage Keys
+| Key | Type | Purpose |
+|-----|------|---------|
+| `pendingPosts` | Array | Posts awaiting action |
+| `seenPostIds` | Array | Deduplication tracking |
+| `commentText` | String | Comment for auto-typing |
+
+---
+
+## ⚠️ Critical Patterns
+
+### ⚡ Groups Array Sync
+> **MUST update both files when adding groups!**
+
 ```javascript
+// background.js L2-5 AND popup.js L2-5
+const groups = [
+  { name: "Display Name", url: "https://www.facebook.com/groups/ID" }
+];
+```
+
+### 🎯 React-Compatible Text Insertion
+```javascript
+// DON'T use innerText - React won't detect changes!
 box.focus();
 const sel = window.getSelection();
 const range = document.createRange();
@@ -50,53 +65,71 @@ range.collapse(false);
 sel.removeAllRanges();
 sel.addRange(range);
 document.execCommand("insertText", false, text);
+box.dispatchEvent(new Event('input', { bubbles: true }));
 ```
-**Don't** use `box.innerText = text` - React won't detect changes.
 
-### Submit Button
-Use `div[role="button"][aria-label="Comment"]` with 500ms delay after typing.
+### 🔍 Comment Box Selector
+```javascript
+const boxes = document.querySelectorAll('[contenteditable="true"][role="textbox"]');
+// Validate: box.offsetParent !== null
+// Context: aria-label includes "comment", "write", or "scrie"
+```
 
-## Key Files & Responsibilities
+---
 
-- **[manifest.json](manifest.json)**: Permissions (`tabs`, `scripting`, `storage`), content script matching
-- **[checkForNewPost.js](checkForNewPost.js)**: Injected script that extracts first post ID from feed after 5s wait
-- **[API Chat.txt](API%20Chat.txt)**: Stores OpenAI API key (🚨 **SECURITY ISSUE** - see below)
+## ⏱️ Timing Reference
 
-## Known Issues & Conventions
+| Location | Value | What it controls |
+|----------|-------|------------------|
+| `background.js` | `5 min` | Check interval (alarm) |
+| `background.js` | `30s` | Delay between groups |
+| `background.js` | `100s` | Tab lifetime before close |
+| `checkForNewPost.js` | `20s` | Initial page load wait |
+| `checkForNewPost.js` | `5s × 12` | Scroll interval (60s total) |
+| `content.js` | `30` | Max seconds to find comment box |
 
-### Security Concern
-OpenAI API key is hardcoded in [popup.js](popup.js) line 18. **Never commit to public repos**. Consider:
-- Using environment variables with build tool (e.g., `chrome.runtime.getManifest().oauth2`)
-- Proxying requests through your own backend
+---
 
-### Romanian Language
-UI and generated comments are in Romanian ("Scrie un comentariu scurt..."). Maintain this when modifying prompts.
+## 🔎 Post Detection Logic
 
-### Timing Dependencies
-- `checkForNewPost.js` waits 5 seconds for page load before extracting post
-- `content.js` waits 500ms after typing before clicking submit button
-- Background tab closes after 15 seconds (ensure script completes first)
+**File:** `checkForNewPost.js`
 
-## Extension Development Workflow
+1. **Age filter** → `isTimeWithinRange()` → ≤12 hours
+2. **Keyword filter** → `containsTransportKeywords()` → must contain `"caut"`
+3. **Dedup** → `seenPostIds` Set prevents re-processing
 
-### Testing Locally
-1. Load extension: `chrome://extensions` → Enable Developer Mode → "Load unpacked" → Select `c:\Users\Cip\Desktop\FB`
-2. Test popup: Click extension icon
-3. Test content script: Open any Facebook group page, check console logs
-4. Test background: Check `chrome://serviceworker-internals` for logs
+**URL Extraction Priority:**
+1. Timestamp links (`2m`, `5h`) — these ARE permalinks
+2. Pattern: `/groups/\d+/posts/` or `/permalink/`
+3. `story_fbid` query params
+4. Construct from `pfbid` in HTML
 
-### No Build Process
-This is vanilla JavaScript - no bundler/transpiler. Edit files directly and reload extension.
+---
 
-## Adding Features
+## 🛠️ Development
 
-### New Prompt Types
-1. Add option to [popup.html](popup.html) `<select id="promptType">`
-2. Add corresponding case in [popup.js](popup.js) around line 25
-3. Ensure prompt stays under max_tokens: 100 (15-20 word target)
+### Load Extension
+```
+chrome://extensions → Developer Mode → Load unpacked → select folder
+```
 
-### Multiple Groups
-Groups array in [popup.js](popup.js) line 6-9. Add more objects with `name` and `url` properties.
+### Debug Locations
+| Component | Where to debug |
+|-----------|----------------|
+| Popup | Click extension icon → right-click → Inspect |
+| Content script | Facebook page → DevTools Console |
+| Background | `chrome://serviceworker-internals` |
 
-### Different Monitoring Intervals
-Change `periodInMinutes` in [background.js](background.js) line 4 (`chrome.alarms.create`).
+### No Build System
+Vanilla JS — edit files directly, click **"Update"** in chrome://extensions.
+
+---
+
+## 📝 Conventions
+
+| Aspect | Convention |
+|--------|------------|
+| **Language** | Romanian (UI & comments) |
+| **Promoted site** | `curierulperfect.com` |
+| **Logging** | Emoji-prefixed: 🚀 ✅ ❌ ⏰ 📝 |
+| **Comments array** | `randomMessages` in popup.js |
