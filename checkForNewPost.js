@@ -329,42 +329,29 @@ function scanFeed() {
       try {
         console.log(`\nPost #${index + 1}:`);
         
-        // FILTRU 1: Verifică dacă postarea conține cuvinte cheie relevante
+        // FILTRU UNIC: Verifică dacă postarea conține "caut"
         const keywordCheck = containsTransportKeywords(post);
         if (!keywordCheck.relevant) {
-          return; // Skip post fără cuvinte cheie
+          return; // Skip post fără "caut"
         }
         
-        // Extract info
+        // Extract info (best effort - dacă nu găsește, folosește fallback)
         const { postUrl, timeText } = extractPostInfo(post);
         
-        if (!postUrl) {
-          console.log("  ⚠️ No permalink found");
-          return;
-        }
+        // Dacă nu are URL, creează unul din group URL
+        const finalUrl = postUrl || window.location.href;
         
-        if (!timeText) {
-          console.log("  ⚠️ No timestamp found");
-          return;
-        }
+        // Dacă nu are timestamp, folosește "Acum"
+        const finalTime = timeText || "Acum";
         
-        // FILTRU 2: Check time range (ultima săptămână)
-        const timeCheck = isTimeWithinRange(timeText);
-        console.log(`  ⏰ Time: "${timeText}" - ${timeCheck.reason}`);
-        
-        if (!timeCheck.valid) {
-          console.log("  ❌ Too old, skipping");
-          return;
-        }
-        
-        // Extract ID
-        const postId = extractPostId(postUrl, post, index);
-        const fullUrl = postUrl.startsWith('http') ? postUrl : 'https://www.facebook.com' + postUrl;
+        // Extract ID (garantat să existe)
+        const postId = postUrl ? extractPostId(postUrl, post, index) : `post_${Date.now()}_${index}`;
+        const fullUrl = finalUrl.startsWith('http') ? finalUrl : 'https://www.facebook.com' + finalUrl;
         
         postsToday.push({ 
           postId, 
           postUrl: fullUrl, 
-          timeText,
+          timeText: finalTime,
           service: keywordCheck.service,
           keyword: keywordCheck.keyword
         });
