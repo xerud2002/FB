@@ -142,13 +142,44 @@ function extractPostInfo(post) {
   const allLinks = post.querySelectorAll('a');
   let postUrl = null;
   let timeText = '';
+  let timestampLink = null;
   
   console.log(`  📊 Total links found: ${allLinks.length}`);
   
-  // METODA 1: Găsește ORICE URL cu pattern-uri cunoscute
-  for (let i = 0; i < allLinks.length; i++) {
-    const link = allLinks[i];
+  // PRIORITATE 1: Găsește timestamp PRIMUL - acesta e de obicei linkul către post!
+  for (const link of allLinks) {
+    const text = (link.innerText || link.textContent || '').trim();
+    const ariaLabel = link.getAttribute('aria-label') || '';
     const href = link.href || '';
+    
+    // Match time patterns: "2m", "5 min", "1h", "3 hours ago", etc.
+    if (text.match(/^\d+\s*(s|sec|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|oră|ore|zi|zile)\s*(ago)?$/i)) {
+      timeText = text.replace(/\s*ago\s*/i, '').trim();
+      timestampLink = link;
+      postUrl = href.split('?')[0]; // Timestamp link IS the post link!
+      console.log(`  ⏰✅ Found timestamp link: "${timeText}" → ${postUrl.substring(0, 80)}`);
+      break;
+    }
+    
+    // Check aria-label for time
+    if (!timeText && ariaLabel) {
+      const ariaMatch = ariaLabel.match(/(\d+)\s*(second|seconds|minute|minutes|hour|hours|day|days|week|min|m|h|s|sec|d|w|oră|ore|zi|zile)/i);
+      if (ariaMatch) {
+        timeText = ariaMatch[0];
+        timestampLink = link;
+        postUrl = href.split('?')[0];
+        console.log(`  ⏰✅ Found timestamp in aria-label: "${timeText}" → ${postUrl.substring(0, 80)}`);
+        break;
+      }
+    }
+  }
+  
+  // METODA 2: Dacă nu am găsit via timestamp, caută pattern-uri URL cunoscute
+  if (!postUrl) {
+    console.log(`  🔍 Searching for URL patterns...`);
+    for (let i = 0; i < allLinks.length; i++) {
+      const link = allLinks[i];
+      const href = link.href || '';
     
     // Log primele 5 link-uri pentru debug
     if (i < 5) {
@@ -191,35 +222,12 @@ function extractPostInfo(post) {
     }
   }
   
-  // Log status after first pass
+  // Log status
   if (!postUrl) {
-    console.log(`  ⚠️ No permalink found in first pass (checked ${allLinks.length} links)`);
+    console.log(`  ⚠️ No permalink found via patterns`);
   }
   
-  // PRIORITATE 2: Găsește timestamp (independent de permalink)
-  for (const link of allLinks) {
-    const text = (link.innerText || link.textContent || '').trim();
-    const ariaLabel = link.getAttribute('aria-label') || '';
-    
-    // Match patterns: "2m", "5 min", "1h", "3 hours ago", etc.
-    if (text.match(/^\d+\s*(s|sec|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|oră|ore|zi|zile)\s*(ago)?$/i)) {
-      timeText = text.replace(/\s*ago\s*/i, '').trim();
-      console.log(`  ⏰ Timestamp found: "${timeText}"`);
-      break;
-    }
-    
-    // Check aria-label
-    if (!timeText && ariaLabel) {
-      const ariaMatch = ariaLabel.match(/(\d+)\s*(second|seconds|minute|minutes|hour|hours|day|days|week|min|m|h|s|sec|d|w|oră|ore|zi|zile)/i);
-      if (ariaMatch) {
-        timeText = ariaMatch[0];
-        console.log(`  ⏰ Timestamp in aria-label: "${timeText}"`);
-        break;
-      }
-    }
-  }
-  
-  // FALLBACK 1: Caută timestamp în textul postării
+  // FALLBACK 1: Caută timestamp în text dacă nu l-am găsit
   if (!timeText) {
     const postText = post.textContent || '';
     const timePatterns = [
