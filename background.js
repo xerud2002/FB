@@ -37,9 +37,14 @@ function checkGroup(group) {
   console.log(`[checkGroup] Starting check for: ${group.name}`);
   console.log(`[checkGroup] URL: ${group.url}`);
   
-  chrome.tabs.create({ url: group.url, active: false }, (tab) => {
+  // Creează tab în background (complet ascuns)
+  chrome.tabs.create({ 
+    url: group.url, 
+    active: false,
+    // Mută tab-ul într-o fereastră minimizată dacă e posibil
+  }, (tab) => {
     const tabId = tab.id;
-    console.log(`[checkGroup] Tab created with ID: ${tabId}`);
+    console.log(`[checkGroup] Tab created with ID: ${tabId} (hidden)`);
 
     setTimeout(() => {
       console.log(`[checkGroup] Attempting to inject script in tab ${tabId}...`);
@@ -69,7 +74,7 @@ function checkGroup(group) {
       });
     }, 3000);
 
-    // Închide tab-ul după 35 secunde (mai mult timp pentru scanare)
+    // Închide tab-ul după 15 secunde (redus de la 35s)
     setTimeout(() => {
       console.log(`[checkGroup] Closing tab ${tabId}...`);
       chrome.tabs.remove(tabId, () => {
@@ -79,7 +84,7 @@ function checkGroup(group) {
           console.log(`[checkGroup] ✅ Tab ${tabId} closed`);
         }
       });
-    }, 35000);
+    }, 15000);
   });
 }
 
