@@ -66,17 +66,54 @@ function isTimeWithinRange(timeText) {
 
 // Helper function: Verifică dacă postarea conține "caut" (cineva caută transport)
 function containsTransportKeywords(postElement) {
-  // Găsește doar textul principal al postării, nu comentarii sau alte elemente
-  const mainContent = postElement.querySelector('[data-ad-preview="message"]') || 
-                      postElement.querySelector('[data-ad-comet-preview="message"]') ||
-                      postElement.querySelector('div[dir="auto"]') ||
-                      postElement;
+  // Găsește doar textul principal al postării - MULT MAI SPECIFIC
+  let mainContent = null;
+  
+  // Priority 1: Actual post message containers
+  const messageSelectors = [
+    '[data-ad-preview="message"]',
+    '[data-ad-comet-preview="message"]',
+    'div[data-ad-comet-preview="message"] div[dir="auto"]',
+    'div[class*="userContent"] div[dir="auto"]',
+    'div[role="article"] div[dir="auto"][style*="text-align"]',
+    'div[data-pagelet*="FeedUnit"] div[dir="auto"]:not([role="button"])'
+  ];
+  
+  for (const selector of messageSelectors) {
+    mainContent = postElement.querySelector(selector);
+    if (mainContent && mainContent.textContent.length > 30) {
+      console.log(`  🎯 Found content with selector: ${selector}`);
+      break;
+    }
+  }
+  
+  // Fallback: Find longest div[dir="auto"] that's not a button
+  if (!mainContent || mainContent.textContent.length < 30) {
+    const allDivs = postElement.querySelectorAll('div[dir="auto"]');
+    let longestDiv = null;
+    let maxLength = 0;
+    
+    allDivs.forEach(div => {
+      // Skip buttons, links, and UI elements
+      if (div.closest('[role="button"]') || div.closest('a[role="link"]')) {
+        return;
+      }
+      const len = (div.textContent || '').trim().length;
+      if (len > maxLength && len > 30) {
+        maxLength = len;
+        longestDiv = div;
+      }
+    });
+    
+    mainContent = longestDiv || postElement;
+    console.log(`  🔍 Fallback: Found longest div (${maxLength} chars)`);
+  }
   
   const text = (mainContent.textContent || '').toLowerCase();
   const originalText = (mainContent.textContent || '').trim();
   
   // Debug: Arată primele 100 caractere din text
-  console.log(`  📝 Post text: "${text.substring(0, 100)}..."`);
+  console.log(`  📝 Post text: "${originalText.substring(0, 100)}..."`);
   
   // SIMPLU: Dacă conține "caut" → AFIȘEAZĂ
   if (text.includes('caut')) {
