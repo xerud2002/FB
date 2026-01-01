@@ -1,6 +1,6 @@
 // Lista grupuri de monitorizat (sincronizată cu popup.js)
 const groups = [
-  { name: "Test Group", url: "https://www.facebook.com/groups/1784041808422081" }
+  { name: "https://www.facebook.com/groups/1784041808422081", url: "https://www.facebook.com/groups/1784041808422081" }
 ];
 
 // Tracking pentru toate post ID-urile văzute vreodată

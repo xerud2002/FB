@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// Helper function: Verifică dacă timestamp-ul e în intervalul acceptat (ultima zi = 24h)
+// Helper function: Verifică dacă timestamp-ul e în intervalul acceptat (ultima săptămână = 7 zile)
 function isTimeWithinRange(timeText) {
   const t = timeText.toLowerCase();
   
@@ -26,36 +26,77 @@ function isTimeWithinRange(timeText) {
     return { valid: true, reason: "Just now" };
   }
   
-  // Minutes (0-1439 = 24 hours)
+  // Minutes (0-10080 = 7 days)
   const minMatch = t.match(/(\d+)\s*(m|min|mins|minute|minutes|minut)/i);
   if (minMatch) {
     const minutes = parseInt(minMatch[1]);
-    return { valid: minutes <= 1439, reason: `${minutes} minutes` };
+    return { valid: minutes <= 10080, reason: `${minutes} minutes` };
   }
   
-  // Hours (0-24)
+  // Hours (0-168 = 7 days)
   const hourMatch = t.match(/(\d+)\s*(h|hr|hour|hours|oră|ore)/i);
   if (hourMatch) {
     const hours = parseInt(hourMatch[1]);
-    return { valid: hours <= 24, reason: `${hours} hours (last 24h)` };
+    return { valid: hours <= 168, reason: `${hours} hours (last week)` };
   }
   
-  // "Yesterday" / "Ieri" - ACCEPTĂ (probabil 12-24h în urmă)
+  // Days (1-7 days)
+  const dayMatch = t.match(/(\d+)\s*(d|day|days|zi|zile)/i);
+  if (dayMatch) {
+    const days = parseInt(dayMatch[1]);
+    return { valid: days <= 7, reason: `${days} days (within week)` };
+  }
+  
+  // "Yesterday" / "Ieri" - ACCEPTĂ
   if (t.match(/yesterday|ieri/i)) {
-    return { valid: true, reason: "Yesterday (within 24h)" };
+    return { valid: true, reason: "Yesterday (within week)" };
   }
   
-  // Days/weeks/months - REJECTEAZĂ
-  if (t.match(/\d+\s*(d|day|days|zi|zile|w|week|weeks|săptămân|month|luni)/i)) {
-    return { valid: false, reason: "More than 1 day old" };
-  }
-  
-  // Named weekdays - REJECTEAZĂ (prea vechi)
+  // Named weekdays within last week - ACCEPTĂ
   if (t.match(/monday|tuesday|wednesday|thursday|friday|saturday|sunday|luni|marți|miercuri|joi|vineri|sâmbătă|duminică/i)) {
-    return { valid: false, reason: "Named weekday (too old)" };
+    return { valid: true, reason: "This week" };
+  }
+  
+  // Weeks/months - REJECTEAZĂ
+  if (t.match(/\d+\s*(w|week|weeks|săptămân|month|luni)/i)) {
+    return { valid: false, reason: "More than 1 week old" };
   }
   
   return { valid: false, reason: "Unknown format" };
+}
+
+// Helper function: Verifică dacă postarea conține cuvinte cheie relevante
+function containsTransportKeywords(postElement) {
+  const text = (postElement.textContent || '').toLowerCase();
+  
+  // Cuvinte cheie pentru transport
+  const keywords = [
+    'caut transport',
+    'caut curier',
+    'caut firma transport',
+    'caut transportator',
+    'am nevoie de transport',
+    'am nevoie transport',
+    'transport pentru',
+    'trebuie transport',
+    'cautam transport',
+    'cautam curier',
+    'cauta transport',
+    'cauta curier',
+    'need transport',
+    'looking for transport'
+  ];
+  
+  // Verifică dacă textul conține vreun cuvânt cheie
+  const found = keywords.some(keyword => text.includes(keyword));
+  
+  if (found) {
+    console.log(`  ✅ POST RELEVANT: Conține cuvinte cheie pentru transport`);
+  } else {
+    console.log(`  ⏭️ POST IGNORAT: Nu conține cuvinte cheie relevante`);
+  }
+  
+  return found;
 }
 
 // Helper function: Extrage permalink și timestamp din postare
@@ -292,6 +333,11 @@ setTimeout(() => {
       try {
         console.log(`\nPost #${index + 1}:`);
         
+        // FILTRU 1: Verifică dacă postarea conține cuvinte cheie relevante
+        if (!containsTransportKeywords(post)) {
+          return; // Skip post fără cuvinte cheie
+        }
+        
         // Extract info
         const { postUrl, timeText } = extractPostInfo(post);
         
@@ -305,7 +351,7 @@ setTimeout(() => {
           return;
         }
         
-        // Check time range
+        // FILTRU 2: Check time range (ultima săptămână)
         const timeCheck = isTimeWithinRange(timeText);
         console.log(`  ⏰ Time: "${timeText}" - ${timeCheck.reason}`);
         
@@ -327,13 +373,14 @@ setTimeout(() => {
     });
     
     console.log(`\n=== SUMMARY ===`);
-    console.log(`Posts from last 24h: ${postsToday.length}`);
-    console.log(`Total scanned: ${allPosts.length}`);
-    console.log(`Group: ${currentGroupName}`);
+    console.log(`✅ Posts with "caut transport" keywords: ${postsToday.length}`);
+    console.log(`📊 Total scanned: ${allPosts.length}`);
+    console.log(`📍 Group: ${currentGroupName}`);
+    console.log(`📅 Time range: Last 7 days`);
     
     // Send results
     if (postsToday.length > 0) {
-      console.log("📤 Sending posts to background...");
+      console.log("📤 Sending relevant posts to background...");
       chrome.runtime.sendMessage({ 
         type: "posts_from_today", 
         posts: postsToday,
@@ -346,7 +393,8 @@ setTimeout(() => {
         }
       });
     } else {
-      console.warn("⚠️ No posts found in time range");
+      console.warn("⚠️ No relevant posts found");
+      console.log("ℹ️ Posts must contain keywords like 'caut transport' and be from last 7 days");
       chrome.runtime.sendMessage({ 
         type: "posts_from_today", 
         posts: [],
