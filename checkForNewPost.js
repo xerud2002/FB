@@ -1,10 +1,16 @@
+// Log IMEDIAT pentru a confirma că scriptul se încarcă
+console.log("🚀 checkForNewPost.js LOADED!");
+console.log("Script location:", window.location.href);
+
 let currentGroupName = "Unknown Group";
 
 // Ascultă mesajul cu numele grupului de la background
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log("📨 Message received in content script:", message);
+  
   if (message.type === "group_info") {
     currentGroupName = message.groupName;
-    console.log("Received group name:", currentGroupName);
+    console.log("✅ Received group name:", currentGroupName);
     sendResponse({ status: "received" });
   }
   return true; // Keep message channel open
