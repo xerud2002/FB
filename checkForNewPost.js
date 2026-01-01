@@ -180,7 +180,31 @@ setTimeout(() => {
     console.log(`Total posts from last hour: ${postsToday.length}`);
     console.log(`Group: ${currentGroupName}`);
     
-    // Trimite doar postările din ultima oră
+    // DEBUGGING: Trimite TOATE postările găsite, ignoră filtrul de timp
+    if (postsToday.length === 0 && allPosts.length > 0) {
+      console.warn("⚠️ No posts passed time filter! Sending ALL posts for debugging...");
+      // Reconstruiește lista cu TOATE postările
+      allPosts.forEach((post, index) => {
+        const allLinks = post.querySelectorAll('a');
+        let postUrl = null;
+        
+        allLinks.forEach(link => {
+          const href = link.href || '';
+          if ((href.includes('/posts/') || href.includes('/permalink/')) && !postUrl) {
+            postUrl = href;
+          }
+        });
+        
+        if (postUrl) {
+          const urlParts = postUrl.split('/');
+          let postId = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2] || `debug_${index}`;
+          postsToday.push({ postId, postUrl, timeText: 'DEBUG' });
+        }
+      });
+      console.log(`📦 Created ${postsToday.length} debug posts`);
+    }
+    
+    // Trimite postările (fie din ultima oră, fie toate pentru debug)
     if (postsToday.length > 0) {
       console.log("📤 Sending posts to background...");
       console.log("Posts to send:", postsToday);
