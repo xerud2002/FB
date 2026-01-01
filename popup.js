@@ -53,7 +53,7 @@ function loadPendingPosts() {
       // Format time nicely
       const timeAgo = getTimeAgo(post.timestamp);
       
-      // Service icon
+      // Service info
       const serviceIcons = {
         'Transport Marfa/Colete': '📦',
         'Mutari/Relocari': '🏠',
@@ -66,22 +66,26 @@ function loadPendingPosts() {
         'Servicii Ambalare': '📦'
       };
       
-      const serviceIcon = post.service ? serviceIcons[post.service] || '📦' : '📦';
+      const serviceIcon = post.service ? serviceIcons[post.service] || '🚚' : '🚚';
       const serviceName = post.service || 'Transport';
+      const timeText = post.timeText || 'Acum';
       
       postDiv.innerHTML = `
-        <div class="post-meta">
-          <span class="post-time">⏱️ ${timeAgo}</span>
-          <span class="post-group">📍 ${post.groupName}</span>
+        <div class="post-header">
+          <span class="post-number">#${index + 1}</span>
+          <span class="post-time">📅 ${timeText}</span>
         </div>
-        <div style="font-size: 10px; color: #667eea; margin: 4px 0; font-weight: 500;">
+        <div class="post-service">
           ${serviceIcon} ${serviceName}
         </div>
-        <div style="display: flex; gap: 6px;">
-          <button class="post-btn openPostBtn" data-index="${index}" style="flex: 1;">
+        <div class="post-meta">
+          <span class="post-detected">🕒 Detectat: ${timeAgo}</span>
+        </div>
+        <div class="post-actions">
+          <button class="post-btn post-btn-primary openPostBtn" data-index="${index}">
             🚀 Deschide & Postează
           </button>
-          <button class="post-btn removePostBtn" data-index="${index}" style="flex: 0 0 40px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+          <button class="post-btn post-btn-delete removePostBtn" data-index="${index}">
             🗑️
           </button>
         </div>
