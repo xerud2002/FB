@@ -1,160 +1,182 @@
-// Optimized comment insertion script
-console.log("🚀 Content script loaded:", window.location.href);
+﻿// Facebook Group Scanner - Content Script
+// Se încarcă automat pe toate paginile de grupuri Facebook
 
-const MAX_ATTEMPTS = 30; // 30 seconds max
-let commentInserted = false;
-let attemptCount = 0;
+console.log("[FB Scanner] Content script loaded on:", window.location.href);
 
-chrome.storage.local.get("commentText", (data) => {
-  if (!data.commentText) {
-    console.log("ℹ️ No comment text prepared");
-    return;
+// Ascultă comenzi de la background
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log("[FB Scanner] Received message:", message.type);
+  
+  if (message.type === "scan_for_posts") {
+    console.log("[FB Scanner] Starting scan for group:", message.groupName);
+    scanPosts(message.groupName).then(posts => {
+      console.log("[FB Scanner] Scan complete, found:", posts.length, "posts");
+      sendResponse({ posts: posts });
+    });
+    return true; // async response
   }
   
-  const commentText = data.commentText;
-  console.log("📝 Comment to insert:", commentText.substring(0, 50) + "...");
-  
-  const interval = setInterval(() => {
-    attemptCount++;
-    
-    if (attemptCount > MAX_ATTEMPTS) {
-      console.error("❌ Timeout after 30 seconds!");
-      clearInterval(interval);
-      showNotification("❌ Comment box not found! Post manually.", "error");
-      chrome.storage.local.remove("commentText");
-      return;
-    }
-    
-    const commentBoxes = document.querySelectorAll('[contenteditable="true"][role="textbox"]');
-    
-    if (commentBoxes.length === 0) {
-      if (attemptCount % 5 === 0) {
-        console.log(`⏳ Attempt ${attemptCount}/${MAX_ATTEMPTS}...`);
-      }
-      return;
-    }
-
-    for (const box of commentBoxes) {
-      // Check visibility
-      if (box.offsetParent === null) continue;
-      
-      // Check if it's a comment box
-      const parent = box.closest('[aria-label]');
-      const ariaLabel = (parent?.getAttribute("aria-label") || "").toLowerCase();
-      const boxLabel = (box.getAttribute("aria-label") || "").toLowerCase();
-      
-      const isCommentBox = 
-        ariaLabel.includes("comment") || 
-        ariaLabel.includes("write") ||
-        ariaLabel.includes("scrie") ||
-        boxLabel.includes("comment");
-      
-      // Check if empty
-      const isEmpty = !box.textContent || box.textContent.trim() === "";
-      
-      if (isCommentBox && isEmpty && !commentInserted) {
-        console.log("✅ Comment box found!");
-        insertComment(box, commentText);
-        commentInserted = true;
-        clearInterval(interval);
-        chrome.storage.local.remove("commentText");
-        return;
-      }
-    }
-  }, 1000);
+  if (message.type === "type_comment") {
+    typeComment(message.text);
+    sendResponse({ status: "typing" });
+    return true;
+  }
 });
 
-// Helper: Insert comment with React compatibility
-function insertComment(box, text) {
-  box.focus();
-  box.click();
+// Scanează postările din feed
+async function scanPosts(groupName) {
+  console.log("[FB Scanner] Scrolling to load posts...");
   
-  setTimeout(() => {
-    try {
-      // Method 1: execCommand (React compatible)
-      const sel = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(box);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
-      
-      const success = document.execCommand("insertText", false, text);
-      
-      if (!success) {
-        // Method 2: InputEvent fallback
-        const inputEvent = new InputEvent('input', {
-          bubbles: true,
-          cancelable: true,
-          inputType: 'insertText',
-          data: text
-        });
-        box.textContent = text;
-        box.dispatchEvent(inputEvent);
+  // Scroll pentru a încărca postări
+  for (let i = 0; i < 5; i++) {
+    window.scrollBy(0, 1000);
+    await sleep(800);
+  }
+  
+  // Scroll înapoi sus
+  window.scrollTo(0, 0);
+  await sleep(500);
+  
+  console.log("[FB Scanner] Looking for posts...");
+  
+  // Găsește postările - Facebook folosește role="article" sau data-pagelet
+  let posts = document.querySelectorAll('[role="article"]');
+  console.log("[FB Scanner] Found", posts.length, "articles");
+  
+  if (posts.length === 0) {
+    // Fallback pentru alt layout
+    posts = document.querySelectorAll('[data-pagelet^="FeedUnit"]');
+    console.log("[FB Scanner] Fallback found", posts.length, "FeedUnits");
+  }
+  
+  const foundPosts = [];
+  const keywords = ["caut", "cine duce", "cine aduce", "caut transport", "caut platforma"];
+  
+  Array.from(posts).slice(0, 25).forEach((post, index) => {
+    const text = (post.textContent || "").toLowerCase();
+    
+    // Verifică keywords
+    for (const keyword of keywords) {
+      if (text.includes(keyword)) {
+        console.log("[FB Scanner] Post #" + (index+1) + " contains:", keyword);
+        
+        const url = findPostUrl(post);
+        const postText = findPostText(post);
+        const time = findPostTime(post);
+        
+        if (url) {
+          foundPosts.push({
+            postId: extractPostId(url) || ("post_" + Date.now() + "_" + index),
+            postUrl: url,
+            postText: postText,
+            timeText: time,
+            keyword: keyword,
+            groupName: groupName
+          });
+          console.log("[FB Scanner] Added post with URL:", url);
+        }
+        break; // o singură potrivire per post
       }
-      
-      // Trigger React onChange
-      box.dispatchEvent(new Event('input', { bubbles: true }));
-      
-      console.log("✅ Comment inserted!");
-      console.log("👉 Click 'Comment' button to post!");
-      
-      showNotification("✅ Comment inserted! Click 'Comment' to post.", "success");
-      
-      // Visual feedback
-      box.style.border = "3px solid #4CAF50";
-      box.style.boxShadow = "0 0 10px rgba(76, 175, 80, 0.5)";
-      setTimeout(() => {
-        box.style.border = "";
-        box.style.boxShadow = "";
-      }, 5000);
-      
-    } catch (err) {
-      console.error("❌ Insert error:", err);
-      showNotification("❌ Insert error! Post manually.", "error");
     }
-  }, 300);
+  });
+  
+  return foundPosts;
 }
 
-// Helper: Show in-page notification
-function showNotification(message, type = "info") {
-  const notification = document.createElement("div");
-  notification.textContent = message;
-  notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 999999;
-    background: ${type === "success" ? "#4CAF50" : type === "error" ? "#f44336" : "#2196F3"};
-    color: white;
-    padding: 15px 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    font-family: Arial, sans-serif;
-    font-size: 14px;
-    font-weight: bold;
-    max-width: 400px;
-    animation: slideIn 0.3s ease-out;
-  `;
-  
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    notification.style.animation = "slideOut 0.3s ease-in";
-    setTimeout(() => notification.remove(), 300);
-  }, 5000);
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
 }
 
-// CSS animations
-const style = document.createElement("style");
-style.textContent = `
-  @keyframes slideIn {
-    from { transform: translateX(400px); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+function findPostUrl(post) {
+  // Caută linkuri cu timestamp (sunt permalink-uri)
+  const links = post.querySelectorAll("a[href]");
+  
+  for (const link of links) {
+    const href = link.getAttribute("href") || "";
+    const text = (link.textContent || "").trim();
+    
+    // Linkuri de timp: "1h", "2m", "3d", etc
+    if (/^\d+[mhd]$/.test(text) || /^\d+\s*(min|ora|ore|zi)/.test(text)) {
+      if (href.includes("/groups/")) {
+        return "https://www.facebook.com" + href.split("?")[0];
+      }
+    }
+    
+    // URL-uri directe de post
+    if (href.includes("/posts/") || href.includes("/permalink/")) {
+      const fullUrl = href.startsWith("http") ? href : "https://www.facebook.com" + href;
+      return fullUrl.split("?")[0];
+    }
   }
-  @keyframes slideOut {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(400px); opacity: 0; }
+  
+  // Fallback: caută în HTML
+  const match = post.innerHTML.match(/\/groups\/\d+\/posts\/(\d+)/);
+  if (match) {
+    const groupId = window.location.pathname.match(/\/groups\/(\d+)/);
+    if (groupId) {
+      return "https://www.facebook.com/groups/" + groupId[1] + "/posts/" + match[1] + "/";
+    }
   }
-`;
-document.head.appendChild(style);
+  
+  return null;
+}
+
+function findPostText(post) {
+  // Găsește cel mai lung text din post (exclude butoane, etc)
+  const textEls = post.querySelectorAll('div[dir="auto"], span[dir="auto"]');
+  let best = "";
+  
+  for (const el of textEls) {
+    const text = (el.textContent || "").trim();
+    if (text.length > best.length && text.length > 20) {
+      // Exclude UI text
+      if (!/^(like|comment|share|vezi|see more|follow)/i.test(text)) {
+        best = text;
+      }
+    }
+  }
+  
+  return best.substring(0, 300).replace(/\s+/g, " ");
+}
+
+function findPostTime(post) {
+  const links = post.querySelectorAll("a");
+  for (const link of links) {
+    const text = (link.textContent || "").trim();
+    if (/^\d+[smhd]$/.test(text) || /^(acum|just now|ieri)/i.test(text)) {
+      return text;
+    }
+  }
+  return "recent";
+}
+
+function extractPostId(url) {
+  const match = url.match(/\/posts\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+// Funcție pentru a scrie comentarii
+function typeComment(text) {
+  console.log("[FB Scanner] Typing comment:", text);
+  
+  // Găsește caseta de comentariu
+  const boxes = document.querySelectorAll('[contenteditable="true"][role="textbox"]');
+  
+  for (const box of boxes) {
+    if (box.offsetParent !== null) { // vizibil
+      box.focus();
+      
+      // Folosește execCommand pentru compatibilitate cu React
+      document.execCommand("selectAll", false, null);
+      document.execCommand("insertText", false, text);
+      
+      // Trigger input event
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      
+      console.log("[FB Scanner] Comment typed successfully");
+      return;
+    }
+  }
+  
+  console.log("[FB Scanner] No comment box found");
+}

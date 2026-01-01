@@ -1,228 +1,139 @@
-// Lista grupuri de monitorizat (sincronizată cu popup.js)
+﻿// Curierul Perfect - Background Service Worker
+console.log("Background worker started!");
+
 const groups = [
-  { name: "Transport Persoane/Colete/Platforma Auto/Romania 🇷🇴Europa🇪🇺", url: "https://www.facebook.com/groups/1784041808422081" },
-  { name: "CAUT PLATFORMA", url: "https://www.facebook.com/groups/1972463676346910" }
+  { name: "Transport Persoane/Colete/Platforma", url: "https://www.facebook.com/groups/1784041808422081" }
 ];
 
-// Tracking pentru toate post ID-urile văzute vreodată
 let seenPostIds = new Set();
-
-// Încarcă post ID-urile văzute la pornirea extensiei
-chrome.storage.local.get("seenPostIds", (data) => {
-  if (data.seenPostIds) {
-    seenPostIds = new Set(data.seenPostIds);
-    console.log(`Loaded ${seenPostIds.size} previously seen post IDs`);
-  }
-});
-
-// Salvează periodic post ID-urile văzute
-function saveSeenPostIds() {
-  chrome.storage.local.set({ seenPostIds: Array.from(seenPostIds) });
-}
-
-// Flag pentru a preveni verificări simultane
 let isChecking = false;
 
-// Crează alarm pentru verificare periodică - șterge alarma existentă mai întâi
-chrome.alarms.clear("checkGroups", (wasCleared) => {
-  console.log(`Previous alarm cleared: ${wasCleared}`);
-  chrome.alarms.create("checkGroups", { periodInMinutes: 5 });
-  console.log("Alarm created: checkGroups every 5 minutes");
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "checkGroups") {
-    if (isChecking) {
-      console.log("⚠️ Already checking groups, skipping this alarm...");
-      return;
-    }
-    
-    isChecking = true;
-    console.log("🔔 Alarm triggered: Starting group check...");
-    
-    // Verifică toate grupurile, unul după altul
-    groups.forEach((group, index) => {
-      setTimeout(() => {
-        checkGroup(group);
-      }, index * 30000); // 30 secunde între fiecare grup pentru a nu supraîncărca
-    });
-    
-    // Reset flag după ce toate grupurile au fost verificate
-    setTimeout(() => {
-      isChecking = false;
-      console.log("✅ All groups checked, ready for next alarm");
-    }, groups.length * 30000 + 5000);
+// Încarcă posturile văzute
+chrome.storage.local.get(["seenPostIds", "pendingPosts"], (data) => {
+  if (data.seenPostIds) {
+    seenPostIds = new Set(data.seenPostIds);
+    console.log("Loaded", seenPostIds.size, "seen post IDs");
   }
 });
 
-function checkGroup(group) {
-  console.log(`[checkGroup] Starting check for: ${group.name}`);
-  console.log(`[checkGroup] URL: ${group.url}`);
+// Crează alarm pentru verificare periodică
+chrome.alarms.create("checkGroups", { periodInMinutes: 5 });
+console.log("Alarm created: every 5 minutes");
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "checkGroups" && !isChecking) {
+    console.log("Alarm triggered, checking groups...");
+    checkAllGroups();
+  }
+});
+
+// Verificare manuală din popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "check_groups_now") {
+    console.log("Manual check requested");
+    if (!isChecking) {
+      checkAllGroups();
+      sendResponse({ status: "started" });
+    } else {
+      sendResponse({ status: "already_checking" });
+    }
+    return true;
+  }
   
-  // Creează tab în background (complet ascuns)
-  chrome.tabs.create({ 
-    url: group.url, 
-    active: false,
-    // Mută tab-ul într-o fereastră minimizată dacă e posibil
-  }, (tab) => {
-    const tabId = tab.id;
-    console.log(`[checkGroup] Tab created with ID: ${tabId} (hidden)`);
+  if (message.type === "posts_from_scan") {
+    console.log("Received posts from scan:", message.posts.length);
+    processPosts(message.posts, message.groupName);
+    sendResponse({ status: "received" });
+    return true;
+  }
+});
 
-    setTimeout(() => {
-      console.log(`[checkGroup] Attempting to inject script in tab ${tabId}...`);
+async function checkAllGroups() {
+  isChecking = true;
+  console.log("Starting group check...");
+  
+  for (const group of groups) {
+    console.log("Checking group:", group.name);
+    await checkGroup(group);
+    await sleep(5000); // 5s între grupuri
+  }
+  
+  isChecking = false;
+  console.log("All groups checked!");
+}
+
+async function checkGroup(group) {
+  return new Promise((resolve) => {
+    console.log("Opening tab for:", group.url);
+    
+    chrome.tabs.create({ url: group.url, active: false }, (tab) => {
+      const tabId = tab.id;
+      console.log("Tab created:", tabId);
       
-      chrome.scripting.executeScript({
-        target: { tabId },
-        files: ["checkForNewPost.js"]
-      }).then(() => {
-        console.log(`[checkGroup] ✅ Script injected successfully in tab ${tabId}`);
+      // Așteaptă să se încarce pagina
+      setTimeout(() => {
+        console.log("Sending scan command to tab", tabId);
         
-        // Așteaptă 500ms înainte de a trimite mesajul
-        setTimeout(() => {
-          console.log(`[checkGroup] Sending group info to tab ${tabId}...`);
-          chrome.tabs.sendMessage(tabId, { 
-            type: "group_info", 
-            groupName: group.name 
-          }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.error(`[checkGroup] ❌ Could not send message to tab ${tabId}:`, chrome.runtime.lastError.message);
-            } else {
-              console.log(`[checkGroup] ✅ Message sent to tab ${tabId}, response:`, response);
-            }
-          });
-        }, 500);
-      }).catch(err => {
-        console.error(`[checkGroup] ❌ Failed to inject script in tab ${tabId}:`, err);
-      });
-    }, 2000);
-
-    // Închide tab-ul după ce scanarea e completă
-    // Timing NOU: 5s wait + 5s scroll + 3s scan + buffer = ~18s total
-    setTimeout(() => {
-      console.log(`[checkGroup] Closing tab ${tabId}...`);
-      chrome.tabs.remove(tabId, () => {
-        if (chrome.runtime.lastError) {
-          console.log(`[checkGroup] Tab ${tabId} already closed`);
-        } else {
-          console.log(`[checkGroup] ✅ Tab ${tabId} closed`);
-        }
-      });
-    }, 18000); // 18 secunde
+        chrome.tabs.sendMessage(tabId, {
+          type: "scan_for_posts",
+          groupName: group.name
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.log("Error sending message:", chrome.runtime.lastError.message);
+          } else if (response && response.posts) {
+            console.log("Received", response.posts.length, "posts from scan");
+            processPosts(response.posts, group.name);
+          }
+          
+          // Închide tab-ul
+          setTimeout(() => {
+            chrome.tabs.remove(tabId, () => {
+              console.log("Tab closed:", tabId);
+              resolve();
+            });
+          }, 2000);
+        });
+      }, 10000); // 10s pentru încărcare pagină + scroll
+    });
   });
 }
 
-// Ascultă mesaje despre postări noi
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Verificare manuală din popup
-  if (message.type === "check_groups_now") {
-    if (isChecking) {
-      console.log("⚠️ Already checking groups! Please wait...");
-      sendResponse({ status: "already_checking" });
-      return true;
-    }
-    
-    console.log("Manual check triggered!");
-    console.log("Groups to check:", groups);
-    console.log("Number of groups:", groups.length);
-    
-    isChecking = true;
-    
-    groups.forEach((group, index) => {
-      const delay = index * 30000; // 30 secunde între grupuri
-      console.log(`Scheduling checkGroup for "${group.name}" with delay ${delay}ms`);
-      
-      setTimeout(() => {
-        console.log(`Now calling checkGroup for "${group.name}"`);
-        checkGroup(group);
-      }, delay);
-    });
-    
-    // Reset flag după ce toate verificările sunt complete
-    setTimeout(() => {
-      isChecking = false;
-      console.log("✅ Manual check completed");
-    }, groups.length * 30000 + 5000);
-    
-    sendResponse({ status: "checking" });
-    return true;
+function processPosts(posts, groupName) {
+  if (!posts || posts.length === 0) {
+    console.log("No posts to process from", groupName);
+    return;
   }
   
-  // Procesează toate postările din ziua curentă
-  if (message.type === "posts_from_today") {
-    console.log(`[POSTS] Received ${message.posts?.length || 0} posts from ${message.groupName}`);
+  // Filtrează posturile noi
+  const newPosts = posts.filter(post => !seenPostIds.has(post.postId));
+  console.log("New posts:", newPosts.length, "out of", posts.length);
+  
+  if (newPosts.length === 0) return;
+  
+  // Marchează ca văzute
+  newPosts.forEach(post => seenPostIds.add(post.postId));
+  chrome.storage.local.set({ seenPostIds: Array.from(seenPostIds) });
+  
+  // Adaugă la pending
+  chrome.storage.local.get("pendingPosts", (data) => {
+    const pending = data.pendingPosts || [];
+    const updated = [...newPosts, ...pending].slice(0, 50); // max 50 posturi
+    chrome.storage.local.set({ pendingPosts: updated });
     
-    if (message.error) {
-      console.error(`[POSTS] Error from content script: ${message.error}`);
-      sendResponse({ status: "error", error: message.error });
-      return true;
-    }
+    console.log("Added", newPosts.length, "posts. Total pending:", updated.length);
     
-    if (!message.posts || message.posts.length === 0) {
-      console.warn(`[POSTS] No posts received from ${message.groupName}`);
-      sendResponse({ status: "no_posts" });
-      return true;
-    }
-    
-    console.log(`[POSTS] Posts data:`, message.posts);
-    
-    // Procesează toate posturile într-un singur batch pentru a evita race conditions
-    chrome.storage.local.get("pendingPosts", (data) => {
-      const existingPosts = data.pendingPosts || [];
-      let newPostsCount = 0;
-      const newPosts = [];
-      
-      message.posts.forEach((post, idx) => {
-        console.log(`[POSTS] Processing post ${idx + 1}/${message.posts.length}: ${post.postId?.slice(0, 30)}`);
-        
-        // Verifică dacă postarea a mai fost văzută
-        if (!seenPostIds.has(post.postId)) {
-          seenPostIds.add(post.postId);
-          newPostsCount++;
-          
-          console.log(`[POSTS] ✅ New post! Will add to pendingPosts...`);
-          
-          // Adaugă în array temporar
-          newPosts.push({
-            groupName: message.groupName,
-            postId: post.postId,
-            postUrl: post.postUrl,
-            timeText: post.timeText || 'Necunoscut',
-            service: post.service || 'Transport General',
-            postText: post.postText || 'Fără text',
-            keyword: post.keyword || 'caut',
-            timestamp: Date.now()
-          });
-        } else {
-          console.log(`[POSTS] ⏭️ Post already seen: ${post.postId?.slice(0, 30)}`);
-        }
+    // Notificare
+    if (newPosts.length > 0) {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icon.png",
+        title: "Postări noi găsite!",
+        message: newPosts.length + " postări noi cu \"caut\" în " + groupName
       });
-      
-      // Salvează toate posturile noi într-o singură operație
-      if (newPosts.length > 0) {
-        const allPosts = [...existingPosts, ...newPosts];
-        chrome.storage.local.set({ pendingPosts: allPosts }, () => {
-          console.log(`[POSTS] ✅ Saved ${newPosts.length} new posts! Total pending: ${allPosts.length}`);
-        });
-      }
-      
-      // Salvează lista actualizată de post ID-uri văzute
-      saveSeenPostIds();
-      
-      // Notificare pentru toate postările noi găsite
-      if (newPostsCount > 0) {
-        chrome.notifications.create({
-          type: "basic",
-          iconUrl: "icon.png",
-          title: `${newPostsCount} postări noi detectate!`,
-          message: `Grup: ${message.groupName}`,
-          priority: 2
-        });
-      }
-      
-      sendResponse({ status: "processed", newPosts: newPostsCount });
-    });
-    return true;
-  }
-});
+    }
+  });
+}
 
-console.log("Curierul Perfect Assistant - Background worker started!");
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
