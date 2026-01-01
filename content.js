@@ -31,7 +31,7 @@ async function doScan(groupName) {
   const articles = document.querySelectorAll('[role="article"]');
   console.log("[CS] Found", articles.length, "articles");
   
-  const kws = ["caut", "cine duce", "cine aduce"];
+  const kws = ["caut", "cine duce", "cine aduce", "transport"]; // transport = test
   const results = [];
   
   articles.forEach((art, idx) => {
