@@ -1,231 +1,355 @@
-// Log IMEDIAT pentru a confirma că scriptul se încarcă
+// Optimized script pentru detecție posturi Facebook
 console.log("🚀 checkForNewPost.js LOADED!");
 console.log("Script location:", window.location.href);
 
 let currentGroupName = "Unknown Group";
 
-// Ascultă mesajul cu numele grupului de la background
+// Ascultă mesajul cu numele grupului
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log("📨 Message received in content script:", message);
-  
   if (message.type === "group_info") {
     currentGroupName = message.groupName;
     console.log("✅ Received group name:", currentGroupName);
     sendResponse({ status: "received" });
   }
-  return true; // Keep message channel open
+  return true;
 });
 
+// Helper function: Verifică dacă timestamp-ul e în intervalul acceptat
+function isTimeWithinRange(timeText) {
+  const t = timeText.toLowerCase();
+  
+  // Debug mode: acceptă unknown
+  if (t === 'unknown') return { valid: true, reason: "Unknown (debug)" };
+  
+  // Just now / acum / seconds
+  if (t.includes('just now') || t.includes('acum') || t === 'now' || t.includes('seconds') || t.includes('secunde')) {
+    return { valid: true, reason: "Just now" };
+  }
+  
+  // Minutes
+  const minMatch = t.match(/(\d+)\s*(m|min|mins|minute|minutes)/i);
+  if (minMatch) {
+    const minutes = parseInt(minMatch[1]);
+    return { valid: minutes <= 59, reason: `${minutes} minutes` };
+  }
+  
+  // Hours (debug: accept up to 24h)
+  const hourMatch = t.match(/(\d+)\s*(h|hr|hour|oră|ore)/i);
+  if (hourMatch) {
+    const hours = parseInt(hourMatch[1]);
+    return { valid: hours <= 24, reason: `${hours} hours (DEBUG: 24h max)` };
+  }
+  
+  // Days/weeks/months - reject
+  if (t.match(/\d+\s*(d|day|days|zi|zile|w|week|weeks|săptămân|month|luni)/i)) {
+    return { valid: false, reason: "Days/weeks/months old" };
+  }
+  
+  // Named days - reject
+  if (t.match(/yesterday|ieri|monday|tuesday|luni|marți/i)) {
+    return { valid: false, reason: "Named day" };
+  }
+  
+  return { valid: false, reason: "Unknown format" };
+}
+
+// Helper function: Extrage permalink și timestamp din postare
+function extractPostInfo(post) {
+  const allLinks = post.querySelectorAll('a');
+  let postUrl = null;
+  let timeText = '';
+  
+  console.log(`  📊 Total links found: ${allLinks.length}`);
+  
+  // METODA 1: Găsește ORICE URL cu pattern-uri cunoscute
+  for (let i = 0; i < allLinks.length; i++) {
+    const link = allLinks[i];
+    const href = link.href || '';
+    
+    // Log primele 5 link-uri pentru debug
+    if (i < 5) {
+      console.log(`  Link ${i+1}: ${href.substring(0, 100)}...`);
+    }
+    
+    // Pattern 1: Full Facebook group post URL
+    if (href.match(/facebook\.com\/groups\/\d+\/posts\//)) {
+      postUrl = href.split('?')[0]; // Remove query params
+      console.log(`  ✅ Pattern 1 - Full group post URL`);
+      break;
+    }
+    
+    // Pattern 2: Permalink style
+    if (href.match(/facebook\.com\/groups\/\d+\/permalink\//)) {
+      postUrl = href.split('?')[0];
+      console.log(`  ✅ Pattern 2 - Permalink style`);
+      break;
+    }
+    
+    // Pattern 3: story_fbid in URL
+    if (href.includes('story_fbid=') && href.includes('facebook.com')) {
+      postUrl = href;
+      console.log(`  ✅ Pattern 3 - story_fbid URL`);
+      break;
+    }
+    
+    // Pattern 4: Relative URL starting with /groups/
+    if (href.startsWith('/groups/') && href.includes('/posts/')) {
+      postUrl = 'https://www.facebook.com' + href.split('?')[0];
+      console.log(`  ✅ Pattern 4 - Relative URL`);
+      break;
+    }
+    
+    // Pattern 5: Any facebook.com URL with /posts/
+    if (href.includes('facebook.com') && href.includes('/posts/')) {
+      postUrl = href.split('?')[0];
+      console.log(`  ✅ Pattern 5 - Any FB /posts/ URL`);
+      break;
+    }
+  }
+  
+  // Log status after first pass
+  if (!postUrl) {
+    console.log(`  ⚠️ No permalink found in first pass (checked ${allLinks.length} links)`);
+  }
+  
+  // PRIORITATE 2: Găsește timestamp (independent de permalink)
+  for (const link of allLinks) {
+    const text = (link.innerText || link.textContent || '').trim();
+    const ariaLabel = link.getAttribute('aria-label') || '';
+    
+    // Match patterns: "2m", "5 min", "1h", "3 hours ago", etc.
+    if (text.match(/^\d+\s*(s|sec|m|min|minute|minutes|h|hr|hour|hours|d|day|days|w|week|oră|ore|zi|zile)\s*(ago)?$/i)) {
+      timeText = text.replace(/\s*ago\s*/i, '').trim();
+      console.log(`  ⏰ Timestamp found: "${timeText}"`);
+      break;
+    }
+    
+    // Check aria-label
+    if (!timeText && ariaLabel) {
+      const ariaMatch = ariaLabel.match(/(\d+)\s*(second|seconds|minute|minutes|hour|hours|day|days|week|min|m|h|s|sec|d|w|oră|ore|zi|zile)/i);
+      if (ariaMatch) {
+        timeText = ariaMatch[0];
+        console.log(`  ⏰ Timestamp in aria-label: "${timeText}"`);
+        break;
+      }
+    }
+  }
+  
+  // FALLBACK 1: Caută timestamp în textul postării
+  if (!timeText) {
+    const postText = post.textContent || '';
+    const timePatterns = [
+      /(\d+)\s*s(?:ec)?(?:onds?)?\b/i,
+      /(\d+)\s*m(?:in)?(?:ute)?(?:s)?\b/i,
+      /(\d+)\s*h(?:r)?(?:our)?(?:s)?\b/i,
+      /(\d+)\s*d(?:ay)?(?:s)?\b/i,
+      /(\d+)\s*w(?:eek)?(?:s)?\b/i,
+      /(\d+)\s*or[ăe]\b/i,
+      /(\d+)\s*zi(?:le)?\b/i
+    ];
+    
+    for (const pattern of timePatterns) {
+      const match = postText.match(pattern);
+      if (match) {
+        timeText = match[0];
+        console.log(`  ⏰ Timestamp in text: "${timeText}"`);
+        break;
+      }
+    }
+  }
+  
+  // FALLBACK 2: Caută ORICE link facebook.com care arată ca un post
+  if (!postUrl) {
+    console.log(`  🔍 FALLBACK 2: Searching all facebook.com links...`);
+    for (const link of allLinks) {
+      const href = link.href || '';
+      if (href.includes('facebook.com') && (href.includes('/posts/') || href.includes('/permalink/') || href.includes('?__cft__'))) {
+        postUrl = href;
+        console.log(`  ✅ Found FB link: ${postUrl}`);
+        break;
+      }
+    }
+  }
+  
+  // FALLBACK 3: Construiește URL din HTML dacă nu s-a găsit
+  if (!postUrl) {
+    console.log(`  🔍 FALLBACK 3: Searching HTML for IDs...`);
+    const postHtml = post.innerHTML || '';
+    const storyMatch = postHtml.match(/story_fbid[=\/](\d+)/);
+    const pfbidMatch = postHtml.match(/(pfbid[A-Za-z0-9]+)/);
+    
+    if (storyMatch || pfbidMatch) {
+      const groupId = window.location.pathname.split('/')[2];
+      const storyId = storyMatch ? storyMatch[1] : pfbidMatch[1];
+      postUrl = `https://www.facebook.com/groups/${groupId}/posts/${storyId}/`;
+      console.log(`  🔨 URL constructed from HTML: ${postUrl}`);
+    } else {
+      console.log(`  ❌ No story_fbid or pfbid found in HTML`);
+    }
+  }
+  
+  // FALLBACK 4: Dacă avem URL dar nu timestamp, acceptă ca "necunoscut"
+  if (postUrl && !timeText) {
+    timeText = "unknown";
+    console.log(`  ⚠️ No timestamp found, using "unknown"`);
+  }
+  
+  // Final check
+  if (!postUrl) {
+    console.log(`  ❌ FAILED: No permalink found after all fallbacks!`);
+  }
+  
+  return { postUrl, timeText };
+}
+
+// Helper function: Extrage ID din URL
+function extractPostId(url, post, index) {
+  const urlParts = url.split('/');
+  let postId = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
+  
+  if (!postId || postId.includes('?')) {
+    postId = post.id || post.getAttribute("data-ad-preview") || 
+             post.querySelector('[id]')?.id || 
+             `post_${index}_${Date.now()}`;
+  }
+  
+  return postId;
+}
+
+// Main detection logic
 setTimeout(() => {
   try {
     console.log("=== STARTING POST DETECTION ===");
-    console.log("Current group:", currentGroupName);
-    console.log("Page URL:", window.location.href);
+    console.log("Group:", currentGroupName);
+    console.log("URL:", window.location.href);
+    console.log("Ready state:", document.readyState);
+    console.log("HTML size:", document.body?.innerHTML?.length || 0);
     
     const feed = document.querySelector('[role="feed"]');
     if (!feed) {
-      console.error("❌ Feed not found! Selectors might have changed.");
+      console.error("❌ Feed not found!");
+      const roles = Array.from(document.querySelectorAll('[role]'))
+        .map(el => el.getAttribute('role'))
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .join(', ');
+      console.log("Available roles:", roles);
+      
+      chrome.runtime.sendMessage({ 
+        type: "posts_from_today", 
+        posts: [],
+        groupName: currentGroupName,
+        error: "Feed not found"
+      });
       return;
     }
     
     console.log("✅ Feed found!");
     
-    // Găsește TOATE postările din feed - încearcă mai multe selectoare
-    let allPosts = feed.querySelectorAll('div[data-pagelet^="FeedUnit"]');
-    if (allPosts.length === 0) {
-      allPosts = feed.querySelectorAll('div[aria-posinset]');
-    }
-    if (allPosts.length === 0) {
-      allPosts = feed.querySelectorAll('div[role="article"]');
+    // Try multiple selectors
+    const selectors = [
+      { name: 'data-pagelet', query: 'div[data-pagelet^="FeedUnit"]' },
+      { name: 'aria-posinset', query: 'div[aria-posinset]' },
+      { name: 'role=article', query: 'div[role="article"]' }
+    ];
+    
+    let allPosts = [];
+    for (const selector of selectors) {
+      allPosts = feed.querySelectorAll(selector.query);
+      console.log(`  ${selector.name}: ${allPosts.length} posts`);
+      if (allPosts.length > 0) break;
     }
     
-    console.log(`Found ${allPosts.length} total posts in feed`);
+    // Fallback: large divs with many links
+    if (allPosts.length === 0) {
+      const allDivs = feed.querySelectorAll('div');
+      allPosts = Array.from(allDivs).filter(div => 
+        div.offsetHeight > 200 && div.querySelectorAll('a').length > 5
+      );
+      console.log(`  Fallback (size): ${allPosts.length} posts`);
+    }
     
     if (allPosts.length === 0) {
-      console.error("❌ No posts found with any selector!");
+      console.error("❌ No posts found!");
+      chrome.runtime.sendMessage({ 
+        type: "posts_from_today", 
+        posts: [],
+        groupName: currentGroupName,
+        error: "No posts found in feed"
+      });
       return;
     }
+    
+    console.log(`Found ${allPosts.length} total posts`);
     
     const postsToday = [];
     
     allPosts.forEach((post, index) => {
       try {
-        // Găsește TOATE link-urile din postare
-        const allLinks = post.querySelectorAll('a');
-        console.log(`Post #${index + 1}: Found ${allLinks.length} links`);
+        console.log(`\nPost #${index + 1}:`);
         
-        let postUrl = null;
-        let timeText = '';
+        // Extract info
+        const { postUrl, timeText } = extractPostInfo(post);
         
-        // Caută link cu timestamp și permalink - mai multe metode
-        allLinks.forEach(link => {
-          const href = link.href || '';
-          const text = (link.innerText || link.textContent || '').toLowerCase().trim();
-          const ariaLabel = (link.getAttribute('aria-label') || '').toLowerCase();
-          
-          // Log doar link-uri relevante
-          if (href && (href.includes('/posts/') || href.includes('/permalink/') || text.match(/\d+\s*(m|h|min|hour)/))) {
-            console.log(`  Link: "${text.slice(0, 40)}" | aria: "${ariaLabel.slice(0, 40)}" | href: ${href.slice(0, 80)}`);
-          }
-          
-          // Metoda 1: Link-uri cu /posts/ sau /permalink/ în URL
-          if ((href.includes('/posts/') || href.includes('/permalink/')) && !postUrl) {
-            postUrl = href;
-            timeText = text || ariaLabel;
-            console.log(`  ✅ Method 1: Found permalink, time: "${timeText}"`);
-          }
-          
-          // Metoda 2: Link-uri cu timestamp pattern în text (2m, 5h, etc)
-          if (!postUrl && text.match(/^\d+\s*(m|min|h|hr|hour|minute)/i)) {
-            // Găsește cel mai apropiat link de postare din parinte
-            let parent = link.parentElement;
-            let attempts = 0;
-            while (parent && attempts < 5) {
-              const parentLinks = parent.querySelectorAll('a[href*="/posts/"], a[href*="/permalink/"]');
-              if (parentLinks.length > 0) {
-                postUrl = parentLinks[0].href;
-                timeText = text;
-                console.log(`  ✅ Method 2: Found via parent traverse, time: "${timeText}"`);
-                break;
-              }
-              parent = parent.parentElement;
-              attempts++;
-            }
-          }
-        });
-        
-        // Metoda 3: Fallback - construiește URL din group + găsește story_fbid în HTML
         if (!postUrl) {
-          const postHtml = post.innerHTML || '';
-          const storyMatch = postHtml.match(/story_fbid[=\/](\d+)/);
-          const pfbidMatch = postHtml.match(/pfbid[A-Za-z0-9]+/);
-          
-          if (storyMatch || pfbidMatch) {
-            const groupId = window.location.pathname.split('/')[2];
-            const storyId = storyMatch ? storyMatch[1] : pfbidMatch[0];
-            postUrl = `https://www.facebook.com/groups/${groupId}/posts/${storyId}/`;
-            console.log(`  ✅ Method 3: Constructed URL from story_fbid`);
-          }
+          console.log("  ⚠️ No permalink found");
+          return;
         }
         
-        // Verifică dacă postarea e din ultima oră
-        let isWithinLastHour = false;
-        if (timeText) {
-          const t = timeText.toLowerCase();
-          
-          console.log(`  ⏰ Checking time: "${timeText}"`);
-          
-          // Variante în engleză și română
-          if (t.includes('just now') || t.includes('acum') || t === 'now') {
-            isWithinLastHour = true;
-            console.log(`    ✅ Match: just now/acum`);
-          } 
-          // Minute: "2m", "2 min", "2 minute", "2 mins"
-          else if (t.match(/^\d+\s*(m|min|mins|minute|minutes)$/i)) {
-            const minutes = parseInt(t.match(/\d+/)[0]);
-            isWithinLastHour = minutes < 60;
-            console.log(`    ${isWithinLastHour ? '✅' : '❌'} ${minutes} minutes`);
-          }
-          // Ore: "1h", "1 h", "1 hr", "1 hour", "1 oră", "1 ore"
-          else if (t.match(/^1\s*(h|hr|hour|oră|ore)$/i)) {
-            isWithinLastHour = true;
-            console.log(`    ✅ Match: 1 hour`);
-          }
-          // Alte ore (2h, 5h, etc) - NU includem
-          else if (t.match(/^\d+\s*(h|hr|hour|hours|oră|ore)$/i)) {
-            const hours = parseInt(t.match(/\d+/)[0]);
-            isWithinLastHour = false;
-            console.log(`    ❌ ${hours} hours - too old`);
-          }
-          // Zile - NU includem
-          else if (t.match(/\d+\s*(d|day|days|zi|zile)/i)) {
-            isWithinLastHour = false;
-            console.log(`    ❌ Days old - skipping`);
-          }
-          else {
-            console.log(`    ⚠️ Unknown time format: "${t}"`);
-          }
-        } else {
-          console.log(`  ⚠️ No time text found`);
+        if (!timeText) {
+          console.log("  ⚠️ No timestamp found");
+          return;
         }
         
-        if (postUrl && isWithinLastHour) {
-          // Extrage ID unic din URL
-          const urlParts = postUrl.split('/');
-          let postId = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2];
-          
-          if (!postId || postId.includes('?')) {
-            postId = post.id || post.getAttribute("data-ad-preview") || 
-                     post.querySelector('[id]')?.id || 
-                     `post_${index}_${Date.now()}`;
-          }
-          
-          if (!postUrl.startsWith('http')) {
-            postUrl = 'https://www.facebook.com' + postUrl;
-          }
-          
-          postsToday.push({ postId, postUrl, timeText });
-          console.log(`✅ Added post #${index + 1}: ID=${postId.slice(0, 30)}, Time="${timeText}"`);
-        } else if (postUrl && !isWithinLastHour) {
-          console.log(`  ⏰ Post #${index + 1} skipped - older than 1 hour: "${timeText}"`);
-        } else {
-          console.log(`  ⚠️ No permalink found for post #${index + 1}`);
+        // Check time range
+        const timeCheck = isTimeWithinRange(timeText);
+        console.log(`  ⏰ Time: "${timeText}" - ${timeCheck.reason}`);
+        
+        if (!timeCheck.valid) {
+          console.log("  ❌ Too old, skipping");
+          return;
         }
+        
+        // Extract ID
+        const postId = extractPostId(postUrl, post, index);
+        const fullUrl = postUrl.startsWith('http') ? postUrl : 'https://www.facebook.com' + postUrl;
+        
+        postsToday.push({ postId, postUrl: fullUrl, timeText });
+        console.log(`  ✅ Added! ID: ${postId.slice(0, 30)}`);
+        
       } catch (err) {
-        console.error(`❌ Error processing post #${index}:`, err);
+        console.error(`  ❌ Error processing post #${index + 1}:`, err);
       }
     });
     
     console.log(`\n=== SUMMARY ===`);
-    console.log(`Total posts from last hour: ${postsToday.length}`);
+    console.log(`Posts from last 24h: ${postsToday.length}`);
+    console.log(`Total scanned: ${allPosts.length}`);
     console.log(`Group: ${currentGroupName}`);
     
-    // DEBUGGING: Trimite TOATE postările găsite, ignoră filtrul de timp
-    if (postsToday.length === 0 && allPosts.length > 0) {
-      console.warn("⚠️ No posts passed time filter! Sending ALL posts for debugging...");
-      // Reconstruiește lista cu TOATE postările
-      allPosts.forEach((post, index) => {
-        const allLinks = post.querySelectorAll('a');
-        let postUrl = null;
-        
-        allLinks.forEach(link => {
-          const href = link.href || '';
-          if ((href.includes('/posts/') || href.includes('/permalink/')) && !postUrl) {
-            postUrl = href;
-          }
-        });
-        
-        if (postUrl) {
-          const urlParts = postUrl.split('/');
-          let postId = urlParts[urlParts.length - 1] || urlParts[urlParts.length - 2] || `debug_${index}`;
-          postsToday.push({ postId, postUrl, timeText: 'DEBUG' });
-        }
-      });
-      console.log(`📦 Created ${postsToday.length} debug posts`);
-    }
-    
-    // Trimite postările (fie din ultima oră, fie toate pentru debug)
+    // Send results
     if (postsToday.length > 0) {
       console.log("📤 Sending posts to background...");
-      console.log("Posts to send:", postsToday);
-      
       chrome.runtime.sendMessage({ 
         type: "posts_from_today", 
         posts: postsToday,
         groupName: currentGroupName
       }, (response) => {
         if (chrome.runtime.lastError) {
-          console.error("❌ Error sending message:", chrome.runtime.lastError.message);
+          console.error("❌ Send error:", chrome.runtime.lastError.message);
         } else {
-          console.log("✅ Response from background:", response);
+          console.log("✅ Response:", response);
         }
       });
     } else {
-      console.error("❌ No posts from last hour found!");
-      console.log("Total posts scanned:", allPosts.length);
+      console.warn("⚠️ No posts found in time range");
+      chrome.runtime.sendMessage({ 
+        type: "posts_from_today", 
+        posts: [],
+        groupName: currentGroupName
+      });
     }
     
   } catch (err) {
-    console.error("❌ Fatal error in post detection:", err);
+    console.error("❌ Fatal error:", err);
   }
-}, 10000); // Așteaptă 10s să se încarce complet pagina
+}, 10000); // Wait 10s for page load

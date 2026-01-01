@@ -19,17 +19,38 @@ function saveSeenPostIds() {
   chrome.storage.local.set({ seenPostIds: Array.from(seenPostIds) });
 }
 
-// Crează alarm pentru verificare periodică
-chrome.alarms.create("checkGroups", { periodInMinutes: 5 });
+// Flag pentru a preveni verificări simultane
+let isChecking = false;
+
+// Crează alarm pentru verificare periodică - șterge alarma existentă mai întâi
+chrome.alarms.clear("checkGroups", (wasCleared) => {
+  console.log(`Previous alarm cleared: ${wasCleared}`);
+  chrome.alarms.create("checkGroups", { periodInMinutes: 5 });
+  console.log("Alarm created: checkGroups every 5 minutes");
+});
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "checkGroups") {
+    if (isChecking) {
+      console.log("⚠️ Already checking groups, skipping this alarm...");
+      return;
+    }
+    
+    isChecking = true;
+    console.log("🔔 Alarm triggered: Starting group check...");
+    
     // Verifică toate grupurile, unul după altul
     groups.forEach((group, index) => {
       setTimeout(() => {
         checkGroup(group);
-      }, index * 5000); // 5 secunde între fiecare grup pentru a nu supraîncărca
+      }, index * 30000); // 30 secunde între fiecare grup pentru a nu supraîncărca
     });
+    
+    // Reset flag după ce toate grupurile au fost verificate
+    setTimeout(() => {
+      isChecking = false;
+      console.log("✅ All groups checked, ready for next alarm");
+    }, groups.length * 30000 + 5000);
   }
 });
 
@@ -72,9 +93,9 @@ function checkGroup(group) {
       }).catch(err => {
         console.error(`[checkGroup] ❌ Failed to inject script in tab ${tabId}:`, err);
       });
-    }, 3000);
+    }, 2000);
 
-    // Închide tab-ul după 15 secunde (redus de la 35s)
+    // Închide tab-ul după 25 secunde (script așteaptă 10s + 15s buffer)
     setTimeout(() => {
       console.log(`[checkGroup] Closing tab ${tabId}...`);
       chrome.tabs.remove(tabId, () => {
@@ -84,7 +105,7 @@ function checkGroup(group) {
           console.log(`[checkGroup] ✅ Tab ${tabId} closed`);
         }
       });
-    }, 15000);
+    }, 25000);
   });
 }
 
@@ -92,12 +113,20 @@ function checkGroup(group) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Verificare manuală din popup
   if (message.type === "check_groups_now") {
+    if (isChecking) {
+      console.log("⚠️ Already checking groups! Please wait...");
+      sendResponse({ status: "already_checking" });
+      return true;
+    }
+    
     console.log("Manual check triggered!");
     console.log("Groups to check:", groups);
     console.log("Number of groups:", groups.length);
     
+    isChecking = true;
+    
     groups.forEach((group, index) => {
-      const delay = index * 5000;
+      const delay = index * 30000; // 30 secunde între grupuri
       console.log(`Scheduling checkGroup for "${group.name}" with delay ${delay}ms`);
       
       setTimeout(() => {
@@ -106,6 +135,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }, delay);
     });
     
+    // Reset flag după ce toate verificările sunt complete
+    setTimeout(() => {
+      isChecking = false;
+      console.log("✅ Manual check completed");
+    }, groups.length * 30000 + 5000);
+    
     sendResponse({ status: "checking" });
     return true;
   }
@@ -113,13 +148,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Procesează toate postările din ziua curentă
   if (message.type === "posts_from_today") {
     console.log(`[POSTS] Received ${message.posts?.length || 0} posts from ${message.groupName}`);
-    console.log(`[POSTS] Posts data:`, message.posts);
+    
+    if (message.error) {
+      console.error(`[POSTS] Error from content script: ${message.error}`);
+      sendResponse({ status: "error", error: message.error });
+      return true;
+    }
     
     if (!message.posts || message.posts.length === 0) {
-      console.warn(`[POSTS] No posts received!`);
+      console.warn(`[POSTS] No posts received from ${message.groupName}`);
       sendResponse({ status: "no_posts" });
       return true;
     }
+    
+    console.log(`[POSTS] Posts data:`, message.posts);
     
     let newPostsCount = 0;
     
@@ -168,41 +210,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     
     sendResponse({ status: "processed" });
-    return true;
-  }
-  
-  // Backwards compatibility - postare unică
-  if (message.type === "new_post_detected") {
-    // Verifică dacă e un post nevăzut
-    if (!seenPostIds.has(message.postId)) {
-      seenPostIds.add(message.postId);
-      saveSeenPostIds();
-      
-      // Adaugă postarea în lista de pending
-      chrome.storage.local.get("pendingPosts", (data) => {
-        const posts = data.pendingPosts || [];
-        
-        posts.push({
-          groupName: message.groupName,
-          postId: message.postId,
-          postUrl: message.postUrl,
-          timestamp: Date.now()
-        });
-        
-        chrome.storage.local.set({ pendingPosts: posts }, () => {
-          // Notificare desktop
-          chrome.notifications.create({
-            type: "basic",
-            iconUrl: "icon.png",
-            title: "Postare nouă detectată!",
-            message: `Grup: ${message.groupName}`,
-            priority: 2
-          });
-        });
-      });
-    }
-    
-    sendResponse({ status: "received" });
     return true;
   }
 });

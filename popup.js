@@ -105,18 +105,33 @@ document.getElementById("checkNowBtn").onclick = () => {
     if (chrome.runtime.lastError) {
       console.error("Error sending message:", chrome.runtime.lastError.message);
       btn.innerText = "❌ Eroare!";
-      btn.disabled = false;
+      setTimeout(() => {
+        btn.innerText = "🔄 Verifică Acum Toate Grupurile";
+        btn.disabled = false;
+      }, 2000);
+      return;
+    }
+    
+    if (response.status === "already_checking") {
+      console.log("Check already in progress");
+      btn.innerText = "⏳ Verificare deja în curs...";
+      setTimeout(() => {
+        btn.innerText = "🔄 Verifică Acum Toate Grupurile";
+        btn.disabled = false;
+      }, 2000);
       return;
     }
     
     console.log("Check triggered, response:", response);
     
+    // Așteaptă 35 secunde per grup (30s delay + 5s extra)
+    const totalWaitTime = groups.length * 35000;
     setTimeout(() => {
       btn.innerText = "✅ Verificat!";
       setTimeout(() => {
         btn.innerText = "🔄 Verifică Acum Toate Grupurile";
         btn.disabled = false;
       }, 2000);
-    }, groups.length * 6000); // Așteaptă să termine toate grupurile
+    }, totalWaitTime);
   });
 };
