@@ -1,6 +1,7 @@
 // Lista grupuri de monitorizat (adaugă mai multe aici)
 const groups = [
-  { name: "Transport Persoane/Colete/Platforma Auto/Romania 🇷🇴Europa🇪🇺", url: "https://www.facebook.com/groups/1784041808422081" }
+  { name: "Transport Persoane/Colete/Platforma Auto/Romania 🇷🇴Europa🇪🇺", url: "https://www.facebook.com/groups/1784041808422081" },
+  { name: "CAUT PLATFORMA", url: "https://www.facebook.com/groups/1972463676346910" }
 ];
 
 // Mesaje random în română pentru comentarii

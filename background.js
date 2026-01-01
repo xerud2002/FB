@@ -1,6 +1,7 @@
 // Lista grupuri de monitorizat (sincronizată cu popup.js)
 const groups = [
-  { name: "https://www.facebook.com/groups/1784041808422081", url: "https://www.facebook.com/groups/1784041808422081" }
+  { name: "Transport Persoane/Colete/Platforma Auto/Romania 🇷🇴Europa🇪🇺", url: "https://www.facebook.com/groups/1784041808422081" },
+  { name: "CAUT PLATFORMA", url: "https://www.facebook.com/groups/1972463676346910" }
 ];
 
 // Tracking pentru toate post ID-urile văzute vreodată
