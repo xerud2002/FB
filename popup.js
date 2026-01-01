@@ -149,41 +149,6 @@ function removePost(index) {
 // Încarcă postările la deschiderea popup-ului
 loadPendingPosts();
 
-// Buton pentru ștergere cache și redetectare
-document.getElementById("clearCacheBtn").onclick = () => {
-  if (confirm('Ștergi toate postările văzute și redetectezi din ultimele 7 zile?')) {
-    const btn = document.getElementById("clearCacheBtn");
-    const originalHTML = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner"></span> Șterg cache...';
-    btn.disabled = true;
-    btn.style.opacity = '0.7';
-    
-    // Șterge tot storage-ul
-    chrome.storage.local.clear(() => {
-      console.log('✅ Cache șters complet!');
-      btn.innerHTML = '✅ Cache șters! Redetectez...';
-      
-      // Declanșează verificare imediată
-      setTimeout(() => {
-        chrome.runtime.sendMessage({ type: "check_groups_now" }, (response) => {
-          const totalWaitTime = groups.length * 35000;
-          setTimeout(() => {
-            btn.innerHTML = '✅ Redetectare completă!';
-            btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
-            loadPendingPosts();
-            setTimeout(() => {
-              btn.innerHTML = originalHTML;
-              btn.disabled = false;
-              btn.style.opacity = '1';
-              btn.style.background = '';
-            }, 3000);
-          }, totalWaitTime);
-        });
-      }, 1000);
-    });
-  }
-};
-
 // Buton pentru verificare manuală
 document.getElementById("checkNowBtn").onclick = () => {
   const btn = document.getElementById("checkNowBtn");
