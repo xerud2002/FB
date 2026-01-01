@@ -394,7 +394,7 @@ setTimeout(() => {
   } catch (err) {
     console.error("❌ Fatal error:", err);
   }
-}, 10000); // Wait 10s for initial page load
+}, 20000); // Wait 20s for initial page load (original spec)
 
 // Funcție de scanare feed
 function scanFeed() {
