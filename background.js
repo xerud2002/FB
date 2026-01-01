@@ -107,15 +107,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   // Procesează toate postările din ziua curentă
   if (message.type === "posts_from_today") {
-    console.log(`Received ${message.posts.length} posts from ${message.groupName}`);
+    console.log(`[POSTS] Received ${message.posts?.length || 0} posts from ${message.groupName}`);
+    console.log(`[POSTS] Posts data:`, message.posts);
+    
+    if (!message.posts || message.posts.length === 0) {
+      console.warn(`[POSTS] No posts received!`);
+      sendResponse({ status: "no_posts" });
+      return true;
+    }
     
     let newPostsCount = 0;
     
-    message.posts.forEach(post => {
+    message.posts.forEach((post, idx) => {
+      console.log(`[POSTS] Processing post ${idx + 1}/${message.posts.length}: ${post.postId?.slice(0, 30)}`);
+      
       // Verifică dacă postarea a mai fost văzută
       if (!seenPostIds.has(post.postId)) {
         seenPostIds.add(post.postId);
         newPostsCount++;
+        
+        console.log(`[POSTS] ✅ New post! Adding to pendingPosts...`);
         
         // Adaugă postarea în lista de pending
         chrome.storage.local.get("pendingPosts", (data) => {
@@ -129,11 +140,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           });
           
           chrome.storage.local.set({ pendingPosts: posts }, () => {
-            console.log(`Added new post: ${post.postId.slice(0, 30)}...`);
+            console.log(`[POSTS] ✅ Saved! Total pending posts: ${posts.length}`);
           });
         });
       } else {
-        console.log(`Post already seen: ${post.postId.slice(0, 30)}...`);
+        console.log(`[POSTS] ⏭️ Post already seen: ${post.postId?.slice(0, 30)}`);
       }
     });
     
