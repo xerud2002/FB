@@ -77,9 +77,14 @@ function loadPendingPosts() {
         <div style="font-size: 10px; color: #667eea; margin: 4px 0; font-weight: 500;">
           ${serviceIcon} ${serviceName}
         </div>
-        <button class="post-btn openPostBtn" data-index="${index}">
-          🚀 Deschide & Postează Comentariu
-        </button>
+        <div style="display: flex; gap: 6px;">
+          <button class="post-btn openPostBtn" data-index="${index}" style="flex: 1;">
+            🚀 Deschide & Postează
+          </button>
+          <button class="post-btn removePostBtn" data-index="${index}" style="flex: 0 0 40px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+            🗑️
+          </button>
+        </div>
       `;
       
       container.appendChild(postDiv);
@@ -90,6 +95,16 @@ function loadPendingPosts() {
       btn.onclick = () => {
         const index = parseInt(btn.dataset.index);
         openPostAndPrepareComment(posts[index], index);
+      };
+    });
+    
+    // Event listeners pentru butoanele de ștergere
+    document.querySelectorAll(".removePostBtn").forEach(btn => {
+      btn.onclick = () => {
+        const index = parseInt(btn.dataset.index);
+        if (confirm('Ștergi această postare din listă?')) {
+          removePost(index);
+        }
       };
     });
   });
@@ -115,16 +130,18 @@ function openPostAndPrepareComment(post, index) {
   
   // Salvează comentariul în storage pentru content script
   chrome.storage.local.set({ commentText: comment }, () => {
-    // Deschide postarea în tab nou
-    chrome.tabs.create({ url: post.postUrl }, () => {
-      // Șterge postarea din listă după ce e deschisă
-      chrome.storage.local.get("pendingPosts", (data) => {
-        const posts = data.pendingPosts || [];
-        posts.splice(index, 1);
-        chrome.storage.local.set({ pendingPosts: posts }, () => {
-          loadPendingPosts();
-        });
-      });
+    // Deschide postarea în tab nou (FĂRĂ să ștergi din listă)
+    chrome.tabs.create({ url: post.postUrl });
+  });
+}
+
+// Șterge manual o postare din listă
+function removePost(index) {
+  chrome.storage.local.get("pendingPosts", (data) => {
+    const posts = data.pendingPosts || [];
+    posts.splice(index, 1);
+    chrome.storage.local.set({ pendingPosts: posts }, () => {
+      loadPendingPosts();
     });
   });
 }
@@ -132,8 +149,40 @@ function openPostAndPrepareComment(post, index) {
 // Încarcă postările la deschiderea popup-ului
 loadPendingPosts();
 
-// Reîncarcă lista la fiecare 2 secunde (pentru actualizări)
-setInterval(loadPendingPosts, 2000);
+// Buton pentru ștergere cache și redetectare
+document.getElementById("clearCacheBtn").onclick = () => {
+  if (confirm('Ștergi toate postările văzute și redetectezi din ultimele 7 zile?')) {
+    const btn = document.getElementById("clearCacheBtn");
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> Șterg cache...';
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    
+    // Șterge tot storage-ul
+    chrome.storage.local.clear(() => {
+      console.log('✅ Cache șters complet!');
+      btn.innerHTML = '✅ Cache șters! Redetectez...';
+      
+      // Declanșează verificare imediată
+      setTimeout(() => {
+        chrome.runtime.sendMessage({ type: "check_groups_now" }, (response) => {
+          const totalWaitTime = groups.length * 35000;
+          setTimeout(() => {
+            btn.innerHTML = '✅ Redetectare completă!';
+            btn.style.background = 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+            loadPendingPosts();
+            setTimeout(() => {
+              btn.innerHTML = originalHTML;
+              btn.disabled = false;
+              btn.style.opacity = '1';
+              btn.style.background = '';
+            }, 3000);
+          }, totalWaitTime);
+        });
+      }, 1000);
+    });
+  }
+};
 
 // Buton pentru verificare manuală
 document.getElementById("checkNowBtn").onclick = () => {

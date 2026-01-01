@@ -370,21 +370,38 @@ function extractPostId(url, post, index) {
 // Main detection logic
 setTimeout(() => {
   try {
-    console.log("=== STARTING POST DETECTION ===");
+    console.log("=== STARTING FULL FEED SCAN ===");
     console.log("Group:", currentGroupName);
     console.log("URL:", window.location.href);
-    console.log("Ready state:", document.readyState);
-    console.log("HTML size:", document.body?.innerHTML?.length || 0);
     
+    // Scroll pentru a încărca mai multe postări
+    console.log("📜 Scrolling to load more posts...");
+    let scrollAttempts = 0;
+    const maxScrolls = 5;
+    
+    const scrollInterval = setInterval(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+      scrollAttempts++;
+      console.log(`  Scroll ${scrollAttempts}/${maxScrolls}...`);
+      
+      if (scrollAttempts >= maxScrolls) {
+        clearInterval(scrollInterval);
+        console.log("✅ Scroll complete, starting scan...");
+        scanFeed();
+      }
+    }, 2000);
+    
+  } catch (err) {
+    console.error("❌ Fatal error:", err);
+  }
+}, 10000); // Wait 10s for initial page load
+
+// Funcție de scanare feed
+function scanFeed() {
+  try {
     const feed = document.querySelector('[role="feed"]');
     if (!feed) {
       console.error("❌ Feed not found!");
-      const roles = Array.from(document.querySelectorAll('[role]'))
-        .map(el => el.getAttribute('role'))
-        .filter((v, i, a) => a.indexOf(v) === i)
-        .join(', ');
-      console.log("Available roles:", roles);
-      
       chrome.runtime.sendMessage({ 
         type: "posts_from_today", 
         posts: [],
@@ -516,6 +533,6 @@ setTimeout(() => {
     }
     
   } catch (err) {
-    console.error("❌ Fatal error:", err);
+    console.error("❌ Scan error:", err);
   }
-}, 10000); // Wait 10s for page load
+}
