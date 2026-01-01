@@ -65,38 +65,73 @@ function isTimeWithinRange(timeText) {
   return { valid: false, reason: "Unknown format" };
 }
 
-// Helper function: Verifică dacă postarea conține cuvinte cheie relevante
+// Helper function: Verifică dacă postarea conține cuvinte cheie relevante pentru servicii transport
 function containsTransportKeywords(postElement) {
   const text = (postElement.textContent || '').toLowerCase();
   
-  // Cuvinte cheie pentru transport
-  const keywords = [
-    'caut transport',
-    'caut curier',
-    'caut firma transport',
-    'caut transportator',
-    'am nevoie de transport',
-    'am nevoie transport',
-    'transport pentru',
-    'trebuie transport',
-    'cautam transport',
-    'cautam curier',
-    'cauta transport',
-    'cauta curier',
-    'need transport',
-    'looking for transport'
-  ];
+  // Servicii Curierul Perfect - cuvinte cheie simple
+  const serviceKeywords = {
+    'Transport Marfa/Colete': [
+      'caut transport', 'transport marfa', 'transport colet', 'transport pachete',
+      'am nevoie transport', 'trebuie transport', 'cautam transport', 'cauta transport',
+      'transport pentru', 'need transport', 'looking for transport'
+    ],
+    'Mutari/Relocari': [
+      'mutare', 'relocare', 'mutam', 'mutari', 'relocari',
+      'caut mutare', 'am nevoie mutare', 'firma mutari', 'servicii mutari'
+    ],
+    'Transport Mobila': [
+      'transport mobila', 'transport mobilier', 'caut transport mobila',
+      'mobila', 'mobilier', 'canapea', 'dulap', 'pat', 'masa'
+    ],
+    'Curierat/Livrari': [
+      'curier', 'livrare', 'livrari', 'caut curier', 'firma curier',
+      'servicii curierat', 'am nevoie curier', 'cautam curier'
+    ],
+    'Transport International': [
+      'transport international', 'transport extern', 'export', 'import',
+      'transport europa', 'transport strainatate', 'international transport'
+    ],
+    'Transport Auto/Masini': [
+      'transport auto', 'transport masina', 'transport vehicul', 'transport masini',
+      'platforma auto', 'tractare', 'remorca auto'
+    ],
+    'Transport Animale': [
+      'transport animale', 'transport caini', 'transport pisici', 'transport cal',
+      'animale', 'pet transport', 'transport pet'
+    ],
+    'Depozitare/Stocare': [
+      'depozitare', 'stocare', 'depozit', 'spatiu depozitare',
+      'caut depozit', 'am nevoie depozit', 'inchiriere depozit'
+    ],
+    'Servicii Ambalare': [
+      'ambalare', 'impachetare', 'ambalat', 'ambalaj',
+      'servicii ambalare', 'caut ambalare', 'materiale ambalare'
+    ]
+  };
   
-  // Verifică dacă textul conține vreun cuvânt cheie
-  const found = keywords.some(keyword => text.includes(keyword));
+  // Verifică fiecare serviciu
+  let foundService = null;
+  let foundKeyword = null;
   
-  if (found) {
-    console.log(`  ✅ POST RELEVANT: Conține cuvinte cheie pentru transport`);
-  } else {
-    console.log(`  ⏭️ POST IGNORAT: Nu conține cuvinte cheie relevante`);
+  for (const [service, keywords] of Object.entries(serviceKeywords)) {
+    for (const keyword of keywords) {
+      if (text.includes(keyword)) {
+        foundService = service;
+        foundKeyword = keyword;
+        break;
+      }
+    }
+    if (foundService) break;
   }
   
-  return found;
+  if (foundService) {
+    console.log(`  ✅ POST RELEVANT: "${foundKeyword}" → Serviciu: ${foundService}`);
+    return { relevant: true, service: foundService, keyword: foundKeyword };
+  } else {
+    console.log(`  ⏭️ POST IGNORAT: Nu conține cuvinte cheie pentru servicii transport`);
+    return { relevant: false };
+  }
 }
 
 // Helper function: Extrage permalink și timestamp din postare
@@ -334,7 +369,8 @@ setTimeout(() => {
         console.log(`\nPost #${index + 1}:`);
         
         // FILTRU 1: Verifică dacă postarea conține cuvinte cheie relevante
-        if (!containsTransportKeywords(post)) {
+        const keywordCheck = containsTransportKeywords(post);
+        if (!keywordCheck.relevant) {
           return; // Skip post fără cuvinte cheie
         }
         
@@ -364,8 +400,15 @@ setTimeout(() => {
         const postId = extractPostId(postUrl, post, index);
         const fullUrl = postUrl.startsWith('http') ? postUrl : 'https://www.facebook.com' + postUrl;
         
-        postsToday.push({ postId, postUrl: fullUrl, timeText });
+        postsToday.push({ 
+          postId, 
+          postUrl: fullUrl, 
+          timeText,
+          service: keywordCheck.service,
+          keyword: keywordCheck.keyword
+        });
         console.log(`  ✅ Added! ID: ${postId.slice(0, 30)}`);
+        console.log(`  📦 Service: ${keywordCheck.service}`);
         
       } catch (err) {
         console.error(`  ❌ Error processing post #${index + 1}:`, err);

@@ -53,10 +53,29 @@ function loadPendingPosts() {
       // Format time nicely
       const timeAgo = getTimeAgo(post.timestamp);
       
+      // Service icon
+      const serviceIcons = {
+        'Transport Marfa/Colete': '📦',
+        'Mutari/Relocari': '🏠',
+        'Transport Mobila': '🛋️',
+        'Curierat/Livrari': '📮',
+        'Transport International': '🌍',
+        'Transport Auto/Masini': '🚗',
+        'Transport Animale': '🐾',
+        'Depozitare/Stocare': '📦',
+        'Servicii Ambalare': '📦'
+      };
+      
+      const serviceIcon = post.service ? serviceIcons[post.service] || '📦' : '📦';
+      const serviceName = post.service || 'Transport';
+      
       postDiv.innerHTML = `
         <div class="post-meta">
           <span class="post-time">⏱️ ${timeAgo}</span>
           <span class="post-group">📍 ${post.groupName}</span>
+        </div>
+        <div style="font-size: 10px; color: #667eea; margin: 4px 0; font-weight: 500;">
+          ${serviceIcon} ${serviceName}
         </div>
         <button class="post-btn openPostBtn" data-index="${index}">
           🚀 Deschide & Postează Comentariu
