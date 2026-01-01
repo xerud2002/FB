@@ -188,6 +188,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             postUrl: post.postUrl,
             timeText: post.timeText || 'Necunoscut',
             service: post.service || 'Transport General',
+            postText: post.postText || 'Fără text',
             timestamp: Date.now()
           });
           

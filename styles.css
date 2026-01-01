@@ -196,6 +196,19 @@ hr {
   border-radius: 8px;
 }
 
+.post-message {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #1e293b;
+  margin: 10px 0;
+  padding: 10px;
+  background: #f8fafc;
+  border-left: 3px solid #667eea;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .post-service {
   font-size: 13px;
   font-weight: 600;

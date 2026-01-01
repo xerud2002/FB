@@ -73,6 +73,7 @@ function containsTransportKeywords(postElement) {
                       postElement;
   
   const text = (mainContent.textContent || '').toLowerCase();
+  const originalText = (mainContent.textContent || '').trim();
   
   // Debug: Arată primele 100 caractere din text
   console.log(`  📝 Post text: "${text.substring(0, 100)}..."`);
@@ -80,7 +81,9 @@ function containsTransportKeywords(postElement) {
   // SIMPLU: Dacă conține "caut" → AFIȘEAZĂ
   if (text.includes('caut')) {
     console.log(`  ✅ CERERE CLIENT: Conține "caut"`);
-    return { relevant: true, service: '🚚 Transport', keyword: 'caut' };
+    // Returnează textul complet al postării (max 200 caractere)
+    const shortText = originalText.length > 200 ? originalText.substring(0, 200) + '...' : originalText;
+    return { relevant: true, service: '🚚 Transport', keyword: 'caut', postText: shortText };
   }
   
   console.log(`  ⏭️ POST IGNORAT: Nu conține "caut"`);
@@ -362,10 +365,11 @@ function scanFeed() {
           postUrl: fullUrl, 
           timeText: finalTime,
           service: keywordCheck.service,
-          keyword: keywordCheck.keyword
+          keyword: keywordCheck.keyword,
+          postText: keywordCheck.postText || 'Fără text'
         });
         console.log(`  ✅ Added! ID: ${postId.slice(0, 30)}`);
-        console.log(`  📦 Service: ${keywordCheck.service}`);
+        console.log(`  📝 Text: ${keywordCheck.postText?.substring(0, 60)}...`);
         
       } catch (err) {
         console.error(`  ❌ Error processing post #${index + 1}:`, err);

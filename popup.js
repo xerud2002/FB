@@ -54,21 +54,9 @@ function loadPendingPosts() {
       // Format time nicely
       const timeAgo = getTimeAgo(post.timestamp);
       
-      // Service info
-      const serviceIcons = {
-        'Transport Marfa/Colete': '📦',
-        'Mutari/Relocari': '🏠',
-        'Transport Mobila': '🛋️',
-        'Curierat/Livrari': '📮',
-        'Transport International': '🌍',
-        'Transport Auto/Masini': '🚗',
-        'Transport Animale': '🐾',
-        'Depozitare/Stocare': '📦',
-        'Servicii Ambalare': '📦'
-      };
-      
-      const serviceIcon = post.service ? serviceIcons[post.service] || '🚚' : '🚚';
-      const serviceName = post.service || 'Transport';
+      // Post text (max 150 chars for display)
+      const postText = post.postText || 'Fără text disponibil';
+      const displayText = postText.length > 150 ? postText.substring(0, 150) + '...' : postText;
       const timeText = post.timeText || 'Acum';
       
       postDiv.innerHTML = `
@@ -76,8 +64,8 @@ function loadPendingPosts() {
           <span class="post-number">#${index + 1}</span>
           <span class="post-time">📅 ${timeText}</span>
         </div>
-        <div class="post-service">
-          ${serviceIcon} ${serviceName}
+        <div class="post-message">
+          ${displayText}
         </div>
         <div class="post-meta">
           <span class="post-detected">🕒 Detectat: ${timeAgo}</span>
