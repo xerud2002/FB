@@ -102,36 +102,7 @@ function containsTransportKeywords(postElement) {
   
   // CERERE DE LA CLIENT: Cuvinte care indică că cineva caută servicii
   const clientRequestKeywords = [
-    // Variante "caut"
-    'caut', 'cautam', 'cauta', 'cautare', 'caut urgent', 'caut pe cineva',
-    'ma intereseaza', 'sunt interesat', 'suntem interesati',
-    
-    // Variante "am nevoie"
-    'am nevoie', 'avem nevoie', 'aveam nevoie', 'ar avea nevoie', 'avea nevoie',
-    'imi trebuie', 'ne trebuie', 'mi-ar trebui', 'ne-ar trebui',
-    
-    // Variante "vreau"
-    'vreau', 'as vrea', 'am vrea', 'as avea nevoie', 'ar avea nevoie',
-    'doresc', 'dorim', 'as dori', 'am dori',
-    
-    // Întrebări
-    'cineva care', 'cineva stie', 'stie cineva', 'cunoaste cineva',
-    'poate cineva', 'are cineva', 'cunoasteti', 'cunosti',
-    'puteti recomanda', 'poate recomanda', 'recomandari', 'recomanda cineva',
-    'unde gasesc', 'unde pot gasi', 'de unde', 'cum gasesc',
-    
-    // Cereri de ajutor
-    'help', 'ajutor', 'ajuta', 'ajutati-ma', 'ma ajuta',
-    'ma poate ajuta', 'ne poate ajuta', 'poate ajuta cineva',
-    
-    // Engleza
-    'need', 'looking for', 'anyone know', 'does anyone', 'can anyone',
-    'i need', 'we need', 'i want', 'searching for',
-    
-    // Alte variante
-    'rog', 'va rog', 'va rugam', 'multumesc anticipat',
-    'as aprecia', 'am aprecia', 'ar fi de ajutor',
-    'urgent', 'urgenta', 'cat mai repede'
+    'caut'
   ];
   
   // Verifică dacă e cerere de la client
