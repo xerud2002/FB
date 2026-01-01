@@ -1,36 +1,29 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Curierul Perfect</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="header">
-    <h1>🚚 Curierul Perfect</h1>
-    <div class="subtitle">Monitorizare grupuri Facebook</div>
+    <h1>Curierul Perfect</h1>
+    <p>Monitor grupuri Facebook</p>
   </div>
-
-  <div class="content">
-    <h3>📍 Grupuri Monitorizate</h3>
+  
+  <div class="section">
+    <div class="section-title">GRUP MONITORIZAT</div>
     <div id="groupsList"></div>
-    
-    <button id="checkNowBtn">🔄 Verifică Acum Toate Grupurile</button>
-    
-    <hr>
-    
-    <h3>📬 Postări Detectate</h3>
-    <div id="pendingPosts">
-      <div class="empty-state">
-        <div class="empty-state-icon">📭</div>
-        <div class="empty-state-text">Nicio postare nouă detectată<br>Verificare automată la fiecare 5 minute</div>
-      </div>
-    </div>
-    
-    <hr>
-    
-    <h3>💬 Mesaj Pregătit</h3>
-    <textarea id="generatedComment" rows="3" readonly placeholder="Comentariul generat va apărea aici..."></textarea>
+    <button id="checkBtn" class="btn btn-primary" style="margin-top:6px">Verifica Acum</button>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">POSTARI DETECTATE</div>
+    <div id="posts" class="posts-container"></div>
+  </div>
+  
+  <div class="section">
+    <div class="section-title">COMENTARIU</div>
+    <textarea id="comment" class="comment-box" placeholder="Comentariul se genereaza automat..."></textarea>
   </div>
   
   <script src="popup.js"></script>

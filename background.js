@@ -1,136 +1,152 @@
-﻿// Curierul Perfect - Background Service Worker
-console.log("Background worker started!");
+﻿// Curierul Perfect - Background v3
+console.log("Background started!");
 
-const groups = [
-  { name: "Transport Persoane/Colete/Platforma", url: "https://www.facebook.com/groups/1784041808422081" }
-];
+const GROUP = {
+  name: "Transport Persoane/Colete/Platforma",
+  url: "https://www.facebook.com/groups/1784041808422081"
+};
 
-let seenPostIds = new Set();
-let isChecking = false;
+let seenIds = new Set();
+let checking = false;
 
-// Încarcă posturile văzute
-chrome.storage.local.get(["seenPostIds", "pendingPosts"], (data) => {
+chrome.storage.local.get(["seenPostIds"], (data) => {
   if (data.seenPostIds) {
-    seenPostIds = new Set(data.seenPostIds);
-    console.log("Loaded", seenPostIds.size, "seen post IDs");
+    seenIds = new Set(data.seenPostIds);
+    console.log("Loaded", seenIds.size, "seen IDs");
   }
 });
 
-// Crează alarm pentru verificare periodică
-chrome.alarms.create("checkGroups", { periodInMinutes: 5 });
-console.log("Alarm created: every 5 minutes");
+chrome.alarms.create("check", { periodInMinutes: 5 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "checkGroups" && !isChecking) {
-    console.log("Alarm triggered, checking groups...");
-    checkAllGroups();
+  if (alarm.name === "check" && !checking) {
+    console.log("Alarm triggered");
+    checkGroup();
   }
 });
 
-// Verificare manuală din popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "check_groups_now") {
-    console.log("Manual check requested");
-    if (!isChecking) {
-      checkAllGroups();
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log("Message:", msg.type);
+  
+  if (msg.type === "check_groups_now") {
+    if (!checking) {
+      checkGroup();
       sendResponse({ status: "started" });
     } else {
-      sendResponse({ status: "already_checking" });
+      sendResponse({ status: "busy" });
     }
     return true;
   }
   
-  if (message.type === "posts_from_scan") {
-    console.log("Received posts from scan:", message.posts.length);
-    processPosts(message.posts, message.groupName);
-    sendResponse({ status: "received" });
+  // Primeste rezultate direct de la content script
+  if (msg.type === "scan_results") {
+    console.log("Got scan results:", msg.posts.length, "posts");
+    if (msg.posts.length > 0) {
+      processPosts(msg.posts);
+    }
+    sendResponse({ ok: true });
     return true;
   }
 });
 
-async function checkAllGroups() {
-  isChecking = true;
-  console.log("Starting group check...");
+async function checkGroup() {
+  checking = true;
+  console.log("Opening:", GROUP.url);
   
-  for (const group of groups) {
-    console.log("Checking group:", group.name);
-    await checkGroup(group);
-    await sleep(5000); // 5s între grupuri
+  try {
+    const tab = await chrome.tabs.create({ url: GROUP.url, active: false });
+    console.log("Tab:", tab.id);
+    
+    // Asteapta incarcarea
+    await waitForLoad(tab.id);
+    console.log("Loaded, waiting 10s for feed...");
+    
+    // Asteapta feed-ul sa se incarce
+    await sleep(10000);
+    
+    // Trimite comanda
+    console.log("Sending scan command...");
+    
+    chrome.tabs.sendMessage(tab.id, {
+      type: "scan_now",
+      groupName: GROUP.name
+    }, (response) => {
+      console.log("Scan response:", response);
+      
+      if (response && response.posts) {
+        console.log("Found", response.posts.length, "posts");
+        if (response.posts.length > 0) {
+          processPosts(response.posts);
+        }
+      }
+      
+      // Inchide tab-ul DUPA ce primeste raspunsul
+      setTimeout(() => {
+        chrome.tabs.remove(tab.id, () => {
+          console.log("Tab closed");
+          checking = false;
+        });
+      }, 3000);
+    });
+    
+    // Timeout de siguranta - inchide dupa 30s oricum
+    setTimeout(() => {
+      if (checking) {
+        chrome.tabs.remove(tab.id).catch(() => {});
+        checking = false;
+        console.log("Timeout - tab closed");
+      }
+    }, 30000);
+    
+  } catch (e) {
+    console.log("Error:", e.message);
+    checking = false;
   }
-  
-  isChecking = false;
-  console.log("All groups checked!");
 }
 
-async function checkGroup(group) {
+function waitForLoad(tabId) {
   return new Promise((resolve) => {
-    console.log("Opening tab for:", group.url);
-    
-    chrome.tabs.create({ url: group.url, active: false }, (tab) => {
-      const tabId = tab.id;
-      console.log("Tab created:", tabId);
-      
-      // Așteaptă să se încarce pagina
-      setTimeout(() => {
-        console.log("Sending scan command to tab", tabId);
-        
-        chrome.tabs.sendMessage(tabId, {
-          type: "scan_for_posts",
-          groupName: group.name
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.log("Error sending message:", chrome.runtime.lastError.message);
-          } else if (response && response.posts) {
-            console.log("Received", response.posts.length, "posts from scan");
-            processPosts(response.posts, group.name);
-          }
-          
-          // Închide tab-ul
-          setTimeout(() => {
-            chrome.tabs.remove(tabId, () => {
-              console.log("Tab closed:", tabId);
-              resolve();
-            });
-          }, 2000);
-        });
-      }, 10000); // 10s pentru încărcare pagină + scroll
-    });
+    const check = (id, info) => {
+      if (id === tabId && info.status === "complete") {
+        chrome.tabs.onUpdated.removeListener(check);
+        resolve();
+      }
+    };
+    chrome.tabs.onUpdated.addListener(check);
+    setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(check);
+      resolve();
+    }, 15000);
   });
 }
 
-function processPosts(posts, groupName) {
-  if (!posts || posts.length === 0) {
-    console.log("No posts to process from", groupName);
+function processPosts(posts) {
+  console.log("Processing", posts.length, "posts");
+  
+  const newPosts = posts.filter(p => !seenIds.has(p.postId));
+  console.log("New:", newPosts.length);
+  
+  if (newPosts.length === 0) {
+    console.log("All posts already seen");
     return;
   }
   
-  // Filtrează posturile noi
-  const newPosts = posts.filter(post => !seenPostIds.has(post.postId));
-  console.log("New posts:", newPosts.length, "out of", posts.length);
+  newPosts.forEach(p => seenIds.add(p.postId));
+  chrome.storage.local.set({ seenPostIds: Array.from(seenIds) });
   
-  if (newPosts.length === 0) return;
-  
-  // Marchează ca văzute
-  newPosts.forEach(post => seenPostIds.add(post.postId));
-  chrome.storage.local.set({ seenPostIds: Array.from(seenPostIds) });
-  
-  // Adaugă la pending
   chrome.storage.local.get("pendingPosts", (data) => {
     const pending = data.pendingPosts || [];
-    const updated = [...newPosts, ...pending].slice(0, 50); // max 50 posturi
-    chrome.storage.local.set({ pendingPosts: updated });
+    const updated = [...newPosts, ...pending].slice(0, 50);
+    chrome.storage.local.set({ pendingPosts: updated }, () => {
+      console.log("Saved! Total:", updated.length);
+    });
     
-    console.log("Added", newPosts.length, "posts. Total pending:", updated.length);
-    
-    // Notificare
-    if (newPosts.length > 0) {
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: "icon.png",
-        title: "Postări noi găsite!",
-        message: newPosts.length + " postări noi cu \"caut\" în " + groupName
-      });
-    }
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icon.png",
+      title: "Postari noi!",
+      message: newPosts.length + " postari cu caut gasite"
+    });
   });
 }
 
