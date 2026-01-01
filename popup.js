@@ -54,9 +54,15 @@ function loadPendingPosts() {
       // Format time nicely
       const timeAgo = getTimeAgo(post.timestamp);
       
-      // Post text (max 150 chars for display)
-      const postText = post.postText || 'Fără text disponibil';
-      const displayText = postText.length > 150 ? postText.substring(0, 150) + '...' : postText;
+      // Post text (max 120 chars for compact display)
+      let postText = post.postText || `Post ${index + 1}`;
+      
+      // If text is just "Facebook" repeated, use fallback
+      if (postText.replace(/Facebook\s*/g, '').trim().length < 10) {
+        postText = `Post ${index + 1}`;
+      }
+      
+      const displayText = postText.length > 120 ? postText.substring(0, 120) + '...' : postText;
       const timeText = post.timeText || 'Acum';
       
       postDiv.innerHTML = `

@@ -90,27 +90,37 @@ function containsTransportKeywords(postElement) {
   // Fallback: Find longest div[dir="auto"] that's not a button
   if (!mainContent || mainContent.textContent.length < 30) {
     const allDivs = postElement.querySelectorAll('div[dir="auto"]');
-    let longestDiv = null;
-    let maxLength = 0;
+    const candidates = [];
     
     allDivs.forEach(div => {
       // Skip buttons, links, and UI elements
-      if (div.closest('[role="button"]') || div.closest('a[role="link"]')) {
+      if (div.closest('[role="button"]') || div.closest('a[aria-label]')) {
         return;
       }
-      const len = (div.textContent || '').trim().length;
-      if (len > maxLength && len > 30) {
-        maxLength = len;
-        longestDiv = div;
-      }
+      
+      const text = (div.textContent || '').trim();
+      const lowerText = text.toLowerCase();
+      
+      // Skip common UI text
+      if (text.length < 20) return;
+      if (lowerText === 'facebook' || lowerText.startsWith('facebook\n')) return;
+      if (lowerText.match(/^(like|comment|share|react|follow)$/i)) return;
+      
+      candidates.push({ div, text, length: text.length });
     });
     
-    mainContent = longestDiv || postElement;
-    console.log(`  🔍 Fallback: Found longest div (${maxLength} chars)`);
+    // Sort by length and take longest
+    candidates.sort((a, b) => b.length - a.length);
+    mainContent = candidates.length > 0 ? candidates[0].div : postElement;
+    console.log(`  🔍 Fallback: Found ${candidates.length} candidates, longest: ${candidates[0]?.length || 0} chars`);
   }
   
-  const text = (mainContent.textContent || '').toLowerCase();
-  const originalText = (mainContent.textContent || '').trim();
+  let originalText = (mainContent.textContent || '').trim();
+  
+  // Clean up repeated "Facebook" strings
+  originalText = originalText.replace(/Facebook\s*/g, '').trim();
+  
+  const text = originalText.toLowerCase();
   
   // Debug: Arată primele 100 caractere din text
   console.log(`  📝 Post text: "${originalText.substring(0, 100)}..."`);
