@@ -66,7 +66,16 @@ function isTimeWithinRange(timeText) {
 
 // Helper function: Verifică dacă postarea conține "caut" (cineva caută transport)
 function containsTransportKeywords(postElement) {
-  const text = (postElement.textContent || '').toLowerCase();
+  // Găsește doar textul principal al postării, nu comentarii sau alte elemente
+  const mainContent = postElement.querySelector('[data-ad-preview="message"]') || 
+                      postElement.querySelector('[data-ad-comet-preview="message"]') ||
+                      postElement.querySelector('div[dir="auto"]') ||
+                      postElement;
+  
+  const text = (mainContent.textContent || '').toLowerCase();
+  
+  // Debug: Arată primele 100 caractere din text
+  console.log(`  📝 Post text: "${text.substring(0, 100)}..."`);
   
   // SIMPLU: Dacă conține "caut" → AFIȘEAZĂ
   if (text.includes('caut')) {
