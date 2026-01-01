@@ -1,2 +1,5 @@
 API Chat.txt
 icon.png
+node_modules/
+pwa/node_modules/
+*.log

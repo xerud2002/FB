@@ -45,27 +45,46 @@ app.get('/api/posts', (req, res) => {
   });
 });
 
-// Add new post (simulare - în realitate vine din scraper)
+// Add new post from Chrome Extension (MAIN INTEGRATION POINT)
 app.post('/api/posts', (req, res) => {
   const post = req.body;
-  detectedPosts.push(post);
   
-  console.log('📬 New post detected:', post);
+  // Verifică dacă postarea există deja
+  const exists = detectedPosts.some(p => p.postId === post.postId);
+  if (exists) {
+    return res.json({ success: true, message: 'Post already exists' });
+  }
   
-  // Trimite notificare push tuturor subscribed users
-  sendPushNotification({
-    title: '🚚 Postare Nouă Detectată!',
-    body: `${post.service || 'Transport'} - ${post.timeText || 'Acum'}`,
-    url: post.postUrl
+  detectedPosts.push({
+    ...post,
+    addedAt: Date.now()
   });
   
-  res.status(201).json({ success: true });
+  console.log('📬 New post from Extension:', post.service, '-', post.timeText);
+  
+  // Trimite notificare push tuturor subscribed users
+  if (subscriptions.length > 0) {
+    sendPushNotification({
+      title: '🚚 Postare Nouă Detectată!',
+      body: `${post.service || 'Transport'} - ${post.timeText || 'Acum'}`,
+      url: post.postUrl
+    });
+  }
+  
+  res.status(201).json({ success: true, postId: post.postId });
 });
 
-// Clear posts
+// Delete specific post
+app.delete('/api/posts/:postId', (req, res) => {
+  const { postId } = req.params;
+  detectedPosts = detectedPosts.filter(p => p.postId !== postId);
+  res.json({ success: true, message: 'Post deleted' });
+});
+
+// Clear all posts
 app.delete('/api/posts', (req, res) => {
   detectedPosts = [];
-  res.json({ success: true, message: 'Posts cleared' });
+  res.json({ success: true, message: 'All posts cleared' });
 });
 
 // Send push notification

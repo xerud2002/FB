@@ -190,6 +190,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.log(`[POSTS] ✅ Saved! Total pending posts: ${posts.length}`);
           });
         });
+        
+        // TRIMITE POST CĂTRE PWA BACKEND
+        const postData = {
+          postId: post.postId,
+          postUrl: post.postUrl,
+          timeText: post.timeText || 'Necunoscut',
+          service: post.service || 'Transport General',
+          keyword: post.keyword || 'transport',
+          timestamp: Date.now()
+        };
+        
+        fetch('http://localhost:3000/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(postData)
+        })
+        .then(response => response.json())
+        .then(result => {
+          console.log(`[PWA] ✅ Post sent to PWA backend:`, result);
+        })
+        .catch(err => {
+          console.error(`[PWA] ❌ Failed to send post to PWA:`, err.message);
+          // Nu oprim procesarea - PWA poate fi offline
+        });
       } else {
         console.log(`[POSTS] ⏭️ Post already seen: ${post.postId?.slice(0, 30)}`);
       }
