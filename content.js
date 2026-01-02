@@ -1,47 +1,48 @@
-﻿// Content Script FINAL
-console.log("[CS] FINAL LOADED");
+﻿console.log("[CS] LOADED");
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "scan_now") {
-    const articles = document.querySelectorAll('[role="article"]');
-    const results = [];
-    
-    articles.forEach((art, i) => {
-      const links = art.querySelectorAll("a[href]");
-      let url = null;
-      
-      for (const link of links) {
-        const h = link.href || "";
-        if (h.includes("/groups/1784041808422081") && (h.includes("/posts/") || h.includes("/permalink/") || h.match(/\/\d{15,}/))) {
-          url = h.split("?")[0].split("#")[0];
-          break;
-        }
-      }
-      
-      if (url) {
-        results.push({
-          postId: url.match(/\d{15,}/)?.[0] || ("p" + Date.now() + i),
-          postUrl: url,
-          postText: (art.textContent || "").substring(0, 200),
-          timeText: "recent",
-          keyword: "found",
-          groupName: msg.groupName
-        });
-      }
-    });
-    
-    console.log("[CS] Results:", results.length);
-    if (results.length) chrome.runtime.sendMessage({type: "scan_results", posts: results});
-    sendResponse({posts: results});
+    doScan(msg.groupName).then(r => sendResponse({posts: r}));
     return true;
   }
-  
   if (msg.type === "type_comment") {
     const box = document.querySelector('[contenteditable="true"][role="textbox"]');
-    if (box) {
-      box.focus();
-      document.execCommand("insertText", false, msg.text);
-    }
+    if (box) { box.focus(); document.execCommand("insertText", false, msg.text); }
     sendResponse({ok: true});
   }
 });
+
+async function doScan(groupName) {
+  for (let i = 0; i < 5; i++) { window.scrollBy(0, 1000); await sleep(1000); }
+  await sleep(2000);
+  
+  const links = document.querySelectorAll('a[href*="/groups/1784041808422081/posts/"]');
+  console.log("[CS] Links:", links.length);
+  
+  const results = [];
+  const seen = new Set();
+  
+  links.forEach(link => {
+    const href = link.href;
+    const clean = href.split("?")[0];
+    if (seen.has(clean)) return;
+    seen.add(clean);
+    
+    const article = link.closest('[role="article"]');
+    results.push({
+      postId: clean.split("/posts/")[1] || ("p" + Date.now()),
+      postUrl: clean,
+      postText: article ? article.innerText.substring(0, 200) : "",
+      timeText: "recent",
+      keyword: "found",
+      groupName: groupName
+    });
+    console.log("[CS] +", clean);
+  });
+  
+  console.log("[CS] Results:", results.length);
+  if (results.length) chrome.runtime.sendMessage({type: "scan_results", posts: results});
+  return results;
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }

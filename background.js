@@ -76,8 +76,8 @@ async function doCheck() {
     setTimeout(() => { chrome.tabs.onUpdated.removeListener(fn); r(); }, 30000);
   });
   
-  console.log("BG: Page loaded, waiting 8s for FB to render...");
-  await sleep(8000);
+  console.log("BG: Page loaded, waiting 3s...");
+  await sleep(3000);
   
   console.log("BG: Sending scan_now...");
   
@@ -94,9 +94,9 @@ async function doCheck() {
     console.log("BG: Error:", e.message);
   }
   
-  // Keep tab open for 1 minute before closing
-  console.log("BG: Keeping tab open for 60s...");
-  await sleep(60000);
+  // Keep tab open for 2 minutes before closing
+  console.log("BG: Keeping tab open for 120s...");
+  await sleep(120000);
   
   try { await chrome.tabs.remove(tab.id); } catch(e) {}
   console.log("BG: Done");
